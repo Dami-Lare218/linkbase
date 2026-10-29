@@ -47,8 +47,8 @@ src/
     ui/                 # UI primitives: generic, feature-agnostic
     [feature]/          # components for one feature only
   lib/
-    <db>/               # database client
-    <auth>/             # auth helpers
+    db/                 # database connection helper + models/ (planned, see database.md)
+    <auth>/             # auth helpers (planned, see auth.md; folder name TBD)
     <types>/            # shared TypeScript types
 ```
 
@@ -59,7 +59,7 @@ src/
 | `lib/` | Shared non-UI code | Database client, auth helpers and shared types each get **their own folder**. |
 
 **TBD:**
-- Exact folder names inside `lib/` (`<db>`, `<auth>`, `<types>` above are placeholders).
+- Auth and types folder names inside `lib/` (`<auth>`, `<types>` above are placeholders). The database folder is planned as `lib/db/`, see [`database.md`](database.md).
 - The list of features, which sets the `components/[feature]/` folders.
 - Where Server Action files live (for example co-located with routes or in a shared folder).
 - Where tests live (no test runner is configured).
@@ -79,18 +79,18 @@ src/
 ## 6. Server Actions
 
 - Mark them with `"use server"` (at the top of the file or inside the function body).
-- Server Actions can be called by direct POST requests, not only from the UI. **Check authentication and authorization inside every action** once auth exists. See `02-guides/` data-security and server-actions docs in the bundled Next.js docs.
+- Server Actions can be called by direct POST requests, not only from the UI. **Check authentication and authorization inside every action** once auth exists. The planned pattern is in [`auth.md`](auth.md) §5. See also `02-guides/` data-security and server-actions docs in the bundled Next.js docs.
 
 ## 7. Undecided (TBD)
 
 | Decision | Status |
 | --- | --- |
-| Database / ORM provider | TBD |
-| Authentication provider | TBD |
+| Database / ORM provider | Planned: MongoDB + Mongoose, not implemented. See [`database.md`](database.md) |
+| Authentication provider | Planned: NextAuth (Auth.js), not implemented. See [`auth.md`](auth.md) (providers, session strategy and config still TBD there) |
 | API surface (Route Handlers, external APIs) | TBD |
-| Validation library | TBD |
+| Validation library | Planned: Zod at the Server Action boundary, schemas in `src/lib/validation/`. Not installed. See [`errors-and-validation.md`](errors-and-validation.md) |
 | Test runner and test location | TBD |
 | Hosting / deployment target | TBD |
-| `lib/` subfolder names and Server Action file location | TBD |
+| `lib/` auth/types folder names and Server Action file location | TBD (`lib/db/` is planned, see [`database.md`](database.md)) |
 
 Update this table and the sections above when a decision is made.
