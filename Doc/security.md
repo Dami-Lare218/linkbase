@@ -10,7 +10,7 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 
 | Protection | State |
 | --- | --- |
-| `.env*` files Git-ignored | **Yes.** `.gitignore` has `.env*`, so `.env.local` is ignored |
+| `.env*` files Git-ignored | **Yes.** `.gitignore` has `.env*`, so `.env.local` and `.env.test` are ignored |
 | `*.pem` Git-ignored | Yes |
 | Env files in repo or working tree | None |
 | `.env.example` | **Does not exist** |
@@ -33,7 +33,26 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 
 - A checked-in `.env.example` lists **every required variable name** with a one-line description and a placeholder value. **Never real values.**
 - ⚠️ **The current `.gitignore` pattern `.env*` also ignores `.env.example`.** Committing it will need an exception (e.g. a `!.env.example` line) in `.gitignore`. Make that change together with creating the file. It hasn't been done yet.
-- **TBD:** the variable names. They depend on undecided choices: the MongoDB connection string name ([`database.md`](database.md) §4), Auth.js secret and provider variables ([`auth.md`](auth.md) §2), and any rate-limit or logging service.
+- **Only placeholder variable names and descriptions** belong in committed templates such as `.env.example`. Never a real connection string, password, token or key, even an "old" or "test" one.
+- **TBD:** the remaining variable names. They depend on undecided choices: the development/production MongoDB connection string name ([`database.md`](database.md) §4), Auth.js secret and provider variables ([`auth.md`](auth.md) §2), and any rate-limit or logging service. `MONGODB_URI_TEST` is decided (below).
+
+### `.env.test` and `MONGODB_URI_TEST`
+
+Established in [`testing.md`](testing.md) §4:
+
+- **`MONGODB_URI_TEST`** holds the test database connection string. It's stored in the **local `.env.test`** file. Neither the file nor a test database exists yet.
+- **`.env.test` must stay Git-ignored** because it may contain database credentials. The existing `.env*` rule in `.gitignore` already covers it. Don't add a `.gitignore` exception for it, and don't force-add it (`git add -f`). This intentionally differs from the Next.js docs, which suggest committing `.env.test`.
+- If `MONGODB_URI_TEST` is listed in `.env.example`, it gets a placeholder value only.
+- Test setup must fail safely, without printing the value, if the variable is missing or points to a non-test database ([`testing.md`](testing.md) §4).
+
+### Connection strings and secrets: never exposed
+
+Database connection strings (dev, test, production) and all other secrets must **never** appear in:
+- **logs:** server logs, error logs, QA or test output ([`errors-and-validation.md`](errors-and-validation.md) §7),
+- **client responses:** error messages, Server Action results, rendered pages, `NEXT_PUBLIC_` variables,
+- **committed files:** source, docs, tests, templates, fixtures or commit messages.
+
+Error messages about configuration name the variable and the problem, never its value.
 
 ## 3. Security headers
 
@@ -124,7 +143,7 @@ These don't replace auth checks. Auth.js provides its own CSRF protection for it
 ## 8. Logs and client responses
 
 - **Never expose** secrets, raw internal errors, stack traces or sensitive user data to the client ([`errors-and-validation.md`](errors-and-validation.md) §6).
-- **Never log** passwords, tokens, session cookies, secrets, connection strings, env var values, raw request bodies, emails or other personal data ([`errors-and-validation.md`](errors-and-validation.md) §7).
+- **Never log** passwords, tokens, session cookies, secrets, connection strings (including `MONGODB_URI_TEST`), env var values, raw request bodies, emails or other personal data ([`errors-and-validation.md`](errors-and-validation.md) §7).
 - Public pages return only approved public fields ([`data-fetching.md`](data-fetching.md) §4).
 - Cache keys and tags are plain text. Never put secrets or personal data in them ([`data-fetching.md`](data-fetching.md) §5).
 
@@ -132,7 +151,7 @@ These don't replace auth checks. Auth.js provides its own CSRF protection for it
 
 | Decision | Status |
 | --- | --- |
-| Env variable names and `.env.example` contents | TBD |
+| Env variable names and `.env.example` contents | TBD, except `MONGODB_URI_TEST` (decided, in `.env.test`, see [`testing.md`](testing.md)) |
 | `.gitignore` exception for `.env.example` | TBD (needed when the file is created) |
 | Hosting, and need for `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | TBD |
 | CSP strategy (nonce / static / SRI) and directives | TBD |
