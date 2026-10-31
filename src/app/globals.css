@@ -1,26 +1,69 @@
 @import "tailwindcss";
+@import "../styles/tokens.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/*
+ * Tailwind theme keys for the Linkbase design tokens (src/styles/tokens.css).
+ * Colour aliases named --text-* in the tokens are exposed as --color-fg-* here,
+ * because @theme reserves --text-* for font sizes.
+ * The token radii (--radius-xs … --radius-3xl) and --ease-out on :root
+ * intentionally override Tailwind's defaults for rounded-* and ease-out.
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-archivo), "Helvetica Neue", Arial, sans-serif;
+
+  --color-white: var(--lb-white);
+  --color-ink: var(--lb-ink-950);
+  --color-gray-50: var(--lb-gray-50);
+  --color-gray-100: var(--lb-gray-100);
+  --color-gray-150: var(--lb-gray-150);
+  --color-gray-200: var(--lb-gray-200);
+  --color-gray-300: var(--lb-gray-300);
+  --color-gray-400: var(--lb-gray-400);
+  --color-gray-500: var(--lb-gray-500);
+  --color-gray-600: var(--lb-gray-600);
+  --color-gray-700: var(--lb-gray-700);
+  --color-gray-800: var(--lb-gray-800);
+  --color-tangerine-50: var(--lb-tangerine-50);
+  --color-tangerine-200: var(--lb-tangerine-200);
+  --color-tangerine-400: var(--lb-tangerine-400);
+  --color-tangerine-500: var(--lb-tangerine-500);
+  --color-tangerine-600: var(--lb-tangerine-600);
+  --color-tangerine-700: var(--lb-tangerine-700);
+  --color-plum-900: var(--lb-plum-900);
+  --color-peach-300: var(--lb-peach-300);
+
+  --color-fg-primary: var(--text-primary);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-tertiary: var(--text-tertiary);
+  --color-fg-disabled: var(--text-disabled);
+  --color-fg-inverse: var(--text-inverse);
+  --color-fg-brand: var(--text-brand);
+
+  --color-surface-page: var(--surface-page);
+  --color-surface-app: var(--surface-app);
+  --color-surface-card: var(--surface-card);
+  --color-surface-fill: var(--surface-fill);
+  --color-surface-fill-hover: var(--surface-fill-hover);
+  --color-surface-fill-active: var(--surface-fill-active);
+  --color-surface-inverse: var(--surface-inverse);
+  --color-surface-inverse-hover: var(--surface-inverse-hover);
+  --color-surface-profile: var(--surface-profile);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme {
+  --text-heading-sm: 20px;
+  --text-heading-sm--line-height: 1.25;
+  --text-body-lg: 18px;
+  --text-body-lg--line-height: 1.5;
+  --text-body: 16px;
+  --text-body--line-height: 1.5;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.43;
+  --text-caption: 12px;
+  --text-caption--line-height: 1.33;
 }

@@ -1,0 +1,269 @@
+/*
+ * Linkbase design tokens.
+ * Copied from the Claude Design system "linkbase-design-system" (tokens/*.css).
+ * Fonts are loaded with next/font in src/app/layout.tsx, not from a CDN.
+ */
+
+:root {
+  /* Neutrals: warm grey ramp */
+  --lb-white: #ffffff;
+  --lb-gray-50: #f8f8f6;
+  --lb-gray-100: #f3f3f1;
+  --lb-gray-150: #eeeeeb;
+  --lb-gray-200: #e6e6e2;
+  --lb-gray-300: #d3d3ce;
+  --lb-gray-400: #a6a6a0;
+  --lb-gray-500: #7e7e77;
+  --lb-gray-600: #62625c;
+  --lb-gray-700: #4a4a45;
+  --lb-gray-800: #2e2e2b;
+  --lb-ink-900: #1c1c1a;
+  --lb-ink-950: #111110;
+  /* Profile default theme */
+  --lb-mist-100: #ecedf1;
+  --lb-mist-400: #a4a8ab;
+  /* Brand: Tangerine */
+  --lb-tangerine-50: #fff1eb;
+  --lb-tangerine-200: #ffc9b3;
+  --lb-tangerine-400: #ff8a5c;
+  --lb-tangerine-500: #ff6b35;
+  --lb-tangerine-600: #e5521c;
+  --lb-tangerine-700: #c2410c;
+  /* Section palette */
+  --lb-ocean-900: #13315c;
+  --lb-ocean-700: #1f4e8c;
+  --lb-mint-200: #a8f0c6;
+  --lb-mint-100: #d9f5e4;
+  --lb-forest-800: #0e4b33;
+  --lb-plum-900: #3d0f3a;
+  --lb-peach-300: #ffb59a;
+  --lb-butter-300: #ffe066;
+  --lb-lilac-200: #e3d7ff;
+  --lb-lilac-800: #4b2a8c;
+  /* Semantic base */
+  --lb-green-600: #137a3e;
+  --lb-green-50: #e3f5ea;
+  --lb-red-600: #c8281e;
+  --lb-red-50: #fdecea;
+  --lb-amber-700: #9a5b00;
+  --lb-amber-50: #fff3d6;
+  --lb-blue-700: #1d4ed8;
+  --lb-blue-50: #e6edff;
+
+  /* Semantic aliases */
+  --text-primary: var(--lb-ink-950);
+  --text-secondary: var(--lb-gray-600);
+  --text-tertiary: var(--lb-gray-500);
+  --text-disabled: var(--lb-gray-400);
+  --text-inverse: var(--lb-white);
+  --text-brand: var(--lb-tangerine-700);
+  --text-link: var(--lb-ink-950);
+
+  --surface-page: var(--lb-white);
+  --surface-app: var(--lb-gray-50);
+  --surface-card: var(--lb-white);
+  --surface-fill: var(--lb-gray-100);
+  --surface-fill-hover: var(--lb-gray-150);
+  --surface-fill-active: var(--lb-gray-200);
+  --surface-inverse: var(--lb-ink-950);
+  --surface-inverse-hover: var(--lb-gray-800);
+  --surface-brand: var(--lb-tangerine-500);
+  --surface-brand-hover: var(--lb-tangerine-600);
+  --surface-profile: var(--lb-mist-100);
+  --surface-backdrop: var(--lb-mist-400);
+  --surface-overlay: rgba(17, 17, 16, 0.48);
+
+  --border-subtle: var(--lb-gray-200);
+  --border-default: var(--lb-gray-300);
+  --border-strong: var(--lb-ink-950);
+
+  --status-success: var(--lb-green-600);
+  --status-success-bg: var(--lb-green-50);
+  --status-error: var(--lb-red-600);
+  --status-error-bg: var(--lb-red-50);
+  --status-warning: var(--lb-amber-700);
+  --status-warning-bg: var(--lb-amber-50);
+  --status-info: var(--lb-blue-700);
+  --status-info-bg: var(--lb-blue-50);
+
+  --focus-ring-inner: var(--lb-white);
+  --focus-ring-outer: var(--lb-ink-950);
+
+  /* Typography (families point at next/font variables) */
+  --font-display: var(--font-archivo), "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-geist-sans), "Helvetica Neue", Arial, sans-serif;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-extrabold: 800;
+
+  --text-display-2xl: 88px;
+  --lh-display-2xl: 0.95;
+  --text-display-xl: 64px;
+  --lh-display-xl: 1;
+  --text-display-lg: 48px;
+  --lh-display-lg: 1.04;
+  --text-display-md: 36px;
+  --lh-display-md: 1.08;
+  --tracking-display: -0.045em;
+  --text-heading-lg: 32px;
+  --lh-heading-lg: 1.12;
+  --text-heading-md: 24px;
+  --lh-heading-md: 1.2;
+  --text-heading-sm: 20px;
+  --lh-heading-sm: 1.25;
+  --tracking-heading: -0.02em;
+  --text-body-lg: 18px;
+  --lh-body-lg: 1.5;
+  --text-body: 16px;
+  --lh-body: 1.5;
+  --text-body-sm: 14px;
+  --lh-body-sm: 1.43;
+  --text-caption: 12px;
+  --lh-caption: 1.33;
+  --text-micro: 11px;
+  --lh-micro: 1.27;
+  --tracking-body: -0.005em;
+
+  /* Spacing */
+  --space-0: 0px;
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+  --control-sm: 36px;
+  --control-md: 48px;
+  --control-lg: 56px;
+  --control-xl: 64px;
+  --container-max: 1280px;
+  --container-narrow: 640px;
+  --profile-max: 580px;
+  --gutter-mobile: 16px;
+  --gutter-tablet: 24px;
+  --gutter-desktop: 32px;
+  --nav-height: 72px;
+  --banner-height: 48px;
+  --sidebar-width: 96px;
+  --section-pad-y: 96px;
+  --section-pad-y-mobile: 56px;
+
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius-3xl: 48px;
+  --radius-pill: 9999px;
+  --radius-circle: 50%;
+  --radius-input: var(--radius-md);
+  --radius-link: var(--radius-lg);
+  --radius-card: var(--radius-xl);
+  --radius-sheet: var(--radius-2xl);
+  --radius-button: var(--radius-pill);
+  --border-width: 1px;
+  --border-width-strong: 2px;
+
+  /* Shadows */
+  --shadow-none: none;
+  --shadow-xs: 0 1px 2px rgba(17, 17, 16, 0.06);
+  --shadow-sm: 0 1px 2px rgba(17, 17, 16, 0.04), 0 2px 8px rgba(17, 17, 16, 0.05);
+  --shadow-md: 0 4px 16px rgba(17, 17, 16, 0.08);
+  --shadow-lg: 0 12px 40px rgba(17, 17, 16, 0.12);
+  --shadow-xl: 0 24px 64px rgba(17, 17, 16, 0.18);
+  --shadow-card: var(--shadow-sm);
+  --shadow-nav: var(--shadow-md);
+  --shadow-preview: var(--shadow-lg);
+  --shadow-overlay: var(--shadow-xl);
+  --shadow-focus: 0 0 0 2px var(--focus-ring-inner), 0 0 0 4px var(--focus-ring-outer);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --press-scale: 0.97;
+}
+
+/* Base styles (from the design system's base.css). Layered so Tailwind utilities can override them. */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--lh-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-primary);
+    background: var(--surface-page);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: var(--text-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  a:hover {
+    color: var(--text-brand);
+  }
+
+  :focus-visible:not(input):not(select):not(textarea) {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+  }
+}
+
+@keyframes lb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes lb-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
