@@ -1,0 +1,18 @@
+{
+  "enabledPlugins": {
+    "commit-commands@anthropic-plugin-directory": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-env-files.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

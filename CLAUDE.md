@@ -27,6 +27,14 @@ No test runner is configured.
 - Fonts: Geist / Geist Mono via `next/font/google`, exposed as `--font-geist-sans` / `--font-geist-mono`.
 - **Database (planned, not implemented):** MongoDB + Mongoose, with the connection helper in `src/lib/db/` and models in `src/lib/db/models/`. No database package, code or env config exists yet. See `Doc/database.md` for the connection, schema, index and user-ownership rules before writing any data code.
 
+## Live Docs (Context7)
+
+- **Before writing code that uses Next.js, Mongoose, NextAuth (Auth.js), Zod or any other external library, fetch that library's current documentation through Context7 first.**
+- Use Context7 to verify API signatures, configuration options and version-specific behavior for the version this project uses (check `package.json`).
+- Do not rely on training data alone for these details.
+- If Context7 has no documentation entry for a library (or the Context7 server is unavailable), say so clearly before proceeding, and name the fallback source used.
+- For Next.js, this is in addition to the bundled docs in `node_modules/next/dist/docs/` (see **Stack and conventions**). Those match the installed version exactly; if they disagree with Context7, follow the bundled docs and point out the difference.
+
 ## Doc Convention
 
 Project documentation lives in `Doc/`. Whenever a new file is added to `Doc/`, add it to **Project Docs** below with one line on what it covers and when to read it. Keep the list in sync if a doc is renamed or removed.
