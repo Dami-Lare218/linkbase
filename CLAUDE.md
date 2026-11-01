@@ -35,6 +35,16 @@ No test runner is configured.
 - If Context7 has no documentation entry for a library (or the Context7 server is unavailable), say so clearly before proceeding, and name the fallback source used.
 - For Next.js, this is in addition to the bundled docs in `node_modules/next/dist/docs/` (see **Stack and conventions**). Those match the installed version exactly; if they disagree with Context7, follow the bundled docs and point out the difference.
 
+## Skills
+
+Project skills live in `.claude/skills/`. Use them at these moments:
+
+- **`plan-feature`**: before building any new feature (plans, scopes, gets approval).
+- **`create-feature`**: only after a plan has been explicitly approved.
+- **`vercel-react-best-practices`**: whenever writing, reviewing or refactoring React components, Next.js pages/layouts, Server Components, Server Actions or data fetching, and for any performance or bundle-size work. Read its `SKILL.md`, then only the `rules/*.md` files relevant to the task (not the full `AGENTS.md`). Prioritise the CRITICAL/HIGH rules (`async-*`, `bundle-*`, `server-*`).
+  - **Precedence:** bundled Next.js docs → `Doc/` files → this skill. If the skill suggests a pattern the project doesn't use (e.g. SWR, LRU caches, older caching APIs), follow `Doc/data-fetching.md` and the `"use cache"` model instead, and point out the difference.
+  - **Sync:** the skill was installed with `npx skills` into `.agents/skills/` (tracked in `skills-lock.json`) and mirrored to `.claude/skills/vercel-react-best-practices/`, which is the copy Claude Code loads. After updating the skill, re-copy the folder.
+
 ## Doc Convention
 
 Project documentation lives in `Doc/`. Whenever a new file is added to `Doc/`, add it to **Project Docs** below with one line on what it covers and when to read it. Keep the list in sync if a doc is renamed or removed.
