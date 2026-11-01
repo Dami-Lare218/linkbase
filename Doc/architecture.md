@@ -13,14 +13,18 @@ src/
     page.tsx       # default starter page
     globals.css    # Tailwind v4 import + theme tokens
     favicon.ico
+  lib/
+    db/
+      connect.ts   # cached MongoDB connection (connectToDatabase)
 public/            # starter SVGs
 Doc/               # project docs
 ```
 
-- Next.js 16.4.3, React 19.3.0, Tailwind CSS v4. No other runtime dependencies.
+- Next.js 16.4.3, React 19.3.0, Tailwind CSS v4. Database: `mongoose` ^9 and `server-only`.
 - `next.config.ts` enables `cacheComponents` and `partialPrefetching`.
 - Import alias `@/*` → `src/*`.
-- **Not present yet:** `src/lib/`, `src/components/`, Server Actions, a database, authentication, API routes and tests.
+- `src/lib/db/connect.ts`: the MongoDB connection helper `connectToDatabase()` ([`database.md`](database.md) §4). No models yet.
+- **Not present yet:** `src/components/`, Server Actions, database models, authentication, API routes and tests.
 
 ## 2. Routing: App Router
 

@@ -2,14 +2,16 @@
 
 How Linkbase will store data with **MongoDB + Mongoose**. Read this before adding a model, a query or a Server Action that reads or writes data.
 
-> **Status: planned, not implemented.** No database code exists yet. Section 1 describes the current state. Everything after it is the intended design. Undecided details are marked **TBD**. Do not fill them in without an explicit decision.
+> **Status: connection set up, no models yet.** The Mongoose connection helper exists (§1, §4). Collections, schemas and indexes are still the intended design. Undecided details are marked **TBD**. Do not fill them in without an explicit decision.
 
 ## 1. What exists today
 
-- No `mongoose` or `mongodb` package in `package.json`.
-- No `src/lib/` folder, no models, no connection helper.
-- No `.env` files and no database credentials.
+- `mongoose` ^9 and `server-only` are dependencies.
+- `src/lib/db/connect.ts` exports `connectToDatabase()` (§4). It imports `server-only`, so importing it into a Client Component fails the build.
+- `MONGODB_URI` holds the development connection string (MongoDB Atlas). It lives in the Git-ignored `.env.local`. `.env.example` (committed) lists it with a placeholder.
+- No models and no `src/lib/db/models/` folder yet. It is created with the first collection.
 - No authentication yet, so there is no user ID to scope queries by.
+- `mongoose` and `mongodb` are on Next.js's automatic `serverExternalPackages` list, so `next.config.ts` needs no change.
 
 ## 2. Stack
 
@@ -17,13 +19,13 @@ How Linkbase will store data with **MongoDB + Mongoose**. Read this before addin
 - **Mongoose** manages schemas, validation and the database connection.
 - Database code runs on the server only: Server Components, Server Actions and Route Handlers on the Node.js runtime. Never import it into a `"use client"` file.
 
-**TBD:** MongoDB hosting (e.g. local, managed cloud), Mongoose version.
+**Decided:** MongoDB Atlas for development; Mongoose 9. **TBD:** production hosting.
 
 ## 3. Folder layout (planned)
 
 ```
 src/lib/db/
-  <connect-helper>.ts    # connection helper (file name TBD)
+  connect.ts             # connection helper: connectToDatabase()
   models/
     <model-name>.ts      # one file per model, kebab-case
 ```
@@ -32,7 +34,7 @@ src/lib/db/
 - Models live in `src/lib/db/models/`, one model per file. File names follow the kebab-case rule in [`architecture.md`](architecture.md). Model names are PascalCase.
 - Import through the alias: `@/lib/db/...`.
 
-**TBD:** the helper's file and function names, and whether `models/` has an index file that re-exports models.
+**TBD:** whether `models/` has an index file that re-exports models.
 
 ## 4. Connection lifecycle
 
@@ -45,26 +47,13 @@ Goal: **one cached connection per server process**, reused by every Server Actio
 
 In development, Next.js hot reload re-runs modules. A plain module-level variable would be reset and open a new connection on every reload. `globalThis` survives reloads, which prevents a pile-up of connections.
 
-Sketch of the pattern (not final code):
+Implemented in `src/lib/db/connect.ts`:
 
-```ts
-// src/lib/db/<connect-helper>.ts
-import mongoose from "mongoose";
-
-const cached = (globalThis as any).mongooseCache ??= { conn: null, promise: null };
-
-export async function connectToDatabase() {
-  if (cached.conn) return cached.conn;
-  cached.promise ??= mongoose.connect(process.env.<CONNECTION_STRING_ENV_VAR>!);
-  try {
-    cached.conn = await cached.promise;
-  } catch (err) {
-    cached.promise = null;
-    throw err;
-  }
-  return cached.conn;
-}
-```
+- The cache is typed (`{ conn, promise }`) on `globalThis`, with no `any`.
+- `MONGODB_URI` is read **when the helper is first called**, not at import, so `next build` works without it. If it's missing, the helper throws `MONGODB_URI is not set…`, naming the variable but never a value.
+- `mongoose.set("strictQuery", true)` is set once (§5).
+- Connect options: `serverSelectionTimeoutMS: 5000` (fail in 5s, not the 30s default) and `bufferCommands: false` (queries error immediately while disconnected). Pool size and other options use driver defaults.
+- On failure the cached promise is cleared and a generic `Could not connect to MongoDB` error is thrown, with the original error as `cause` for server logs. The connection string never reaches a client.
 
 Also guard models against re-registration on hot reload:
 
@@ -72,7 +61,7 @@ Also guard models against re-registration on hot reload:
 export const Example = mongoose.models.Example ?? mongoose.model("Example", exampleSchema);
 ```
 
-**TBD:** the connection-string env var name, connection options (pool size, timeouts), and whether to fail at startup when the variable is missing.
+**TBD:** tuning connection options (e.g. pool size) for production, once hosting is decided.
 
 ## 5. Schemas and validation
 
@@ -114,11 +103,12 @@ Users can only read and change their own data. Rules:
 
 | Decision | Status |
 | --- | --- |
-| MongoDB hosting | TBD |
-| Mongoose version | TBD |
-| Connection-string env var name | TBD |
-| Connection options | TBD |
-| Helper file and function names | TBD |
+| MongoDB hosting | Development: MongoDB Atlas. Production: TBD |
+| Mongoose version | Decided: ^9 |
+| Connection-string env var name | Decided: `MONGODB_URI` (test: `MONGODB_URI_TEST`, see [`testing.md`](testing.md) §4) |
+| Connection options | Decided: `serverSelectionTimeoutMS: 5000`, `bufferCommands: false`, `strictQuery: true`. Production tuning TBD |
+| Missing `MONGODB_URI` | Decided: fail on first use, not at startup or build |
+| Helper file and function names | Decided: `src/lib/db/connect.ts`, `connectToDatabase()` |
 | Collections, schemas and fields | TBD |
 | `handle` uniqueness and scope | TBD |
 | Production index creation | TBD |

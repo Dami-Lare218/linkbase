@@ -10,10 +10,10 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 
 | Protection | State |
 | --- | --- |
-| `.env*` files Git-ignored | **Yes.** `.gitignore` has `.env*`, so `.env.local` and `.env.test` are ignored |
+| `.env*` files Git-ignored | **Yes.** `.gitignore` has `.env*`, so `.env.local` and `.env.test` are ignored. `!.env.example` is the only exception |
 | `*.pem` Git-ignored | Yes |
-| Env files in repo or working tree | None |
-| `.env.example` | **Does not exist** |
+| Env files in repo | Only `.env.example` (placeholders). `.env.local` is created locally by each developer |
+| `.env.example` | **Exists.** Lists `MONGODB_URI` and `MONGODB_URI_TEST` with placeholder values |
 | Security headers / CSP | **None.** `next.config.ts` has no `headers()` and no `proxy.ts` exists |
 | Authentication, authorization | None ([`auth.md`](auth.md)) |
 | Rate limiting | None |
@@ -29,12 +29,13 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 - Production secrets are set in the hosting platform's environment, not in files. Hosting is **TBD**.
 - For multi-instance or self-hosted deploys, Next.js documents `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (a stable key for Server Action closure encryption). Whether Linkbase needs it depends on hosting: **TBD**.
 
-### `.env.example` (planned)
+### `.env.example`
 
 - A checked-in `.env.example` lists **every required variable name** with a one-line description and a placeholder value. **Never real values.**
-- ⚠️ **The current `.gitignore` pattern `.env*` also ignores `.env.example`.** Committing it will need an exception (e.g. a `!.env.example` line) in `.gitignore`. Make that change together with creating the file. It hasn't been done yet.
+- The `.gitignore` pattern `.env*` would also ignore `.env.example`, so `.gitignore` has a `!.env.example` exception. Don't add exceptions for any other env file.
 - **Only placeholder variable names and descriptions** belong in committed templates such as `.env.example`. Never a real connection string, password, token or key, even an "old" or "test" one.
-- **TBD:** the remaining variable names. They depend on undecided choices: the development/production MongoDB connection string name ([`database.md`](database.md) §4), Auth.js secret and provider variables ([`auth.md`](auth.md) §2), and any rate-limit or logging service. `MONGODB_URI_TEST` is decided (below).
+- **Decided:** `MONGODB_URI`, the development connection string, read only by `src/lib/db/connect.ts` ([`database.md`](database.md) §4), and `MONGODB_URI_TEST` (below).
+- **TBD:** the remaining variable names: Auth.js secret and provider variables ([`auth.md`](auth.md) §2), the production connection string (hosting TBD), and any rate-limit or logging service. Add each one to `.env.example` when it's introduced.
 
 ### `.env.test` and `MONGODB_URI_TEST`
 
