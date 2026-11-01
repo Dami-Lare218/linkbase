@@ -35,6 +35,7 @@ Call the `EnterPlanMode` tool (load it with `ToolSearch` using `select:EnterPlan
    | Secrets, headers, user content/links, rate limiting | `Doc/security.md` |
    | Components and screens | `Doc/ui.md`, `Doc/design-system.md` |
    | Any TypeScript/React code | `Doc/coding-standards.md` |
+   | React components, pages, Server Components/Actions, data fetching | `vercel-react-best-practices` skill (`SKILL.md` + relevant `rules/` files) — plan for no waterfalls, small client bundles and lean server/client boundaries |
    | Tests | `Doc/testing.md` |
 
 4. For Next.js-specific behaviour, check the bundled docs in `node_modules/next/dist/docs/01-app/`. For external libraries (Next.js, Mongoose, Auth.js, Zod, etc.), follow the Context7 rule in `CLAUDE.md`.

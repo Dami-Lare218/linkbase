@@ -37,6 +37,7 @@ Build a feature exactly as described in its approved plan, then hand control bac
    | Forms, Zod schemas, error boundaries, logging | `Doc/errors-and-validation.md` |
    | Secrets, headers, user content/links | `Doc/security.md` |
    | Components and screens | `Doc/ui.md`, `Doc/design-system.md` |
+   | React components, pages, Server Components/Actions, data fetching | `vercel-react-best-practices` skill (`SKILL.md` + relevant `rules/` files) |
 
 ## Step 3: Check library docs
 
@@ -48,6 +49,7 @@ Build a feature exactly as described in its approved plan, then hand control bac
 
 - Work through the plan's **Files** section: create and modify exactly those files.
 - Follow `CLAUDE.md` conventions: App Router under `src/app/`, `@/*` imports, generated route prop types (`PageProps<...>`, `LayoutProps<...>`), Tailwind v4 via `globals.css` (never add `tailwind.config.js`), the `"use cache"` / Suspense model for data, and server-side auth plus `userId`-scoped queries for user data.
+- Apply the `vercel-react-best-practices` CRITICAL/HIGH rules (`async-*`, `bundle-*`, `server-*`) while writing React/Next.js code. Where they conflict with the bundled Next.js docs or `Doc/`, those win.
 - Don't touch unrelated files.
 - When finished, run `npm run lint` and `npm run build` to catch lint and type errors, and fix any errors in the code you wrote. This is a compile check, not QA.
 
