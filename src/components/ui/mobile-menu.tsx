@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Menu, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+export type NavLink = { href: string; label: string };
 
 type MobileMenuProps = {
-  links: { href: string; label: string }[];
+  links: NavLink[];
+  /** Shown under the links, e.g. a "Log in" button for signed-out visitors. */
+  footer?: ReactNode;
 };
 
 /** Menu button and dropdown panel for the nav below 820px. */
-export function MobileMenu({ links }: MobileMenuProps) {
+export function MobileMenu({ links, footer }: MobileMenuProps) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -75,9 +78,7 @@ export function MobileMenu({ links }: MobileMenuProps) {
             {link.label}
           </a>
         ))}
-        <Button href="#" variant="secondary" fullWidth>
-          Log in
-        </Button>
+        {footer}
       </div>
     </div>
   );

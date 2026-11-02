@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { LoaderCircle } from "lucide-react";
 
 type ButtonVariant = "primary" | "secondary";
 type ButtonSize = "md" | "lg";
@@ -8,6 +10,9 @@ type ButtonProps = {
   variant?: ButtonVariant;
   size?: ButtonSize;
   fullWidth?: boolean;
+  /** Shows a spinner, and sets `disabled` and `aria-busy`. The label stays, so the width doesn't change. */
+  loading?: boolean;
+  disabled?: boolean;
   className?: string;
 } & (
   | { href: string; type?: never }
@@ -15,13 +20,13 @@ type ButtonProps = {
 );
 
 const base =
-  "items-center justify-center gap-2 rounded-full border border-transparent font-sans text-body font-semibold leading-none tracking-[-0.01em] whitespace-nowrap no-underline cursor-pointer select-none transition-[background-color,border-color,transform] duration-[120ms] ease-[var(--ease-standard)] active:scale-[var(--press-scale)]";
+  "items-center justify-center gap-2 rounded-full border border-transparent font-sans text-body font-semibold leading-none tracking-[-0.01em] whitespace-nowrap no-underline cursor-pointer select-none transition-[background-color,border-color,transform] duration-[120ms] ease-[var(--ease-standard)] active:scale-[var(--press-scale)] disabled:cursor-not-allowed disabled:bg-surface-fill disabled:text-fg-disabled disabled:active:scale-100";
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "bg-surface-inverse text-fg-inverse hover:bg-surface-inverse-hover hover:text-fg-inverse",
+    "bg-surface-inverse text-fg-inverse hover:bg-surface-inverse-hover hover:text-fg-inverse disabled:hover:bg-surface-fill disabled:hover:text-fg-disabled",
   secondary:
-    "bg-surface-fill text-fg-primary hover:bg-surface-fill-hover hover:text-fg-primary active:bg-surface-fill-active",
+    "bg-surface-fill text-fg-primary hover:bg-surface-fill-hover hover:text-fg-primary active:bg-surface-fill-active disabled:hover:bg-surface-fill disabled:hover:text-fg-disabled",
 };
 
 const sizes: Record<ButtonSize, string> = {
@@ -34,6 +39,8 @@ export function Button({
   variant = "primary",
   size = "md",
   fullWidth = false,
+  loading = false,
+  disabled = false,
   className = "",
   href,
   type = "button",
@@ -46,16 +53,27 @@ export function Button({
     className,
   ].join(" ");
 
-  if (href !== undefined) {
+  const isDisabled = disabled || loading;
+
+  // A disabled link renders as a disabled button (ui.md §2.1).
+  if (href !== undefined && !isDisabled) {
     return (
-      <a href={href} className={classes}>
+      <Link href={href} className={classes}>
         {children}
-      </a>
+      </Link>
     );
   }
 
   return (
-    <button type={type} className={classes}>
+    <button
+      type={href !== undefined ? "button" : type}
+      disabled={isDisabled}
+      aria-busy={loading || undefined}
+      className={classes}
+    >
+      {loading ? (
+        <LoaderCircle size={20} aria-hidden className="animate-[lb-spin_800ms_linear_infinite]" />
+      ) : null}
       {children}
     </button>
   );

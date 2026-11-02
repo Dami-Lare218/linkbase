@@ -2,7 +2,7 @@
 
 Security conventions for Linkbase. Read this before handling secrets or env vars, changing `next.config.ts` headers, rendering user-generated content or links, adding sign-in or link-creation flows, or writing logs and error responses.
 
-> **Status: almost nothing here is implemented.** Section 1 lists what is actually in place. Everything else is a planned convention. Undecided details are marked **TBD**. Related: [`auth.md`](auth.md), [`data-mutations.md`](data-mutations.md), [`errors-and-validation.md`](errors-and-validation.md), [`data-fetching.md`](data-fetching.md).
+> **Status: partly implemented.** Section 1 lists what is actually in place. Everything else is a planned convention. Undecided details are marked **TBD**. Related: [`auth.md`](auth.md), [`data-mutations.md`](data-mutations.md), [`errors-and-validation.md`](errors-and-validation.md), [`data-fetching.md`](data-fetching.md).
 
 Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-policy.md`, `02-guides/data-security.md`, `02-guides/server-actions.md`, `02-guides/environment-variables.md`, `03-api-reference/05-config/01-next-config-js/headers.md`.
 
@@ -15,8 +15,9 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 | Env files in repo | Only `.env.example` (placeholders). `.env.local` is created locally by each developer |
 | `.env.example` | **Exists.** Lists `MONGODB_URI` and `MONGODB_URI_TEST` with placeholder values |
 | Security headers / CSP | **None.** `next.config.ts` has no `headers()` and no `proxy.ts` exists |
-| Authentication, authorization | None ([`auth.md`](auth.md)) |
-| Rate limiting | None |
+| Authentication, authorization | **Yes.** Auth.js email + password, JWT cookie sessions, `requireUser()` in pages ([`auth.md`](auth.md)) |
+| Password storage | **Yes.** bcrypt (cost 12), `passwordHash` never selected by default. Login always runs bcrypt, so timing doesn't reveal which emails exist |
+| Rate limiting | **Sign-in and sign-up only** (§4). Link creation not built yet |
 | Server Actions built-in protections | Provided by Next.js when actions are added (§7). No actions exist yet |
 | Lint rule for `target="_blank"` | **Turned off.** `eslint-config-next` sets `react/jsx-no-target-blank: "off"`, so §6 is not lint-enforced |
 
@@ -35,7 +36,8 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 - The `.gitignore` pattern `.env*` would also ignore `.env.example`, so `.gitignore` has a `!.env.example` exception. Don't add exceptions for any other env file.
 - **Only placeholder variable names and descriptions** belong in committed templates such as `.env.example`. Never a real connection string, password, token or key, even an "old" or "test" one.
 - **Decided:** `MONGODB_URI`, the development connection string, read only by `src/lib/db/connect.ts` ([`database.md`](database.md) §4), and `MONGODB_URI_TEST` (below).
-- **TBD:** the remaining variable names: Auth.js secret and provider variables ([`auth.md`](auth.md) §2), the production connection string (hosting TBD), and any rate-limit or logging service. Add each one to `.env.example` when it's introduced.
+- **Decided:** `AUTH_SECRET`, required by Auth.js to sign and encrypt session cookies. Generate it with `npx auth secret` (or `openssl rand -base64 33`), and use a different value per environment. `AUTH_TRUST_HOST=true` is only needed when self-hosting behind a reverse proxy.
+- **TBD:** the production connection string (hosting TBD) and any logging service. Add each one to `.env.example` when it's introduced.
 
 ### `.env.test` and `MONGODB_URI_TEST`
 
@@ -73,7 +75,7 @@ Also worth deciding (documented in the Next.js `headers` reference): `Strict-Tra
 
 - **Scripts:** Next.js inline bootstrap scripts, and any third-party scripts.
 - **Styles:** Tailwind v4 output, `next/font` (Geist), and any inline styles.
-- **Auth flow:** the Auth.js sign-in, callback and redirect URLs, and provider domains (`form-action`, `connect-src`, `frame-src` as needed). Providers are TBD.
+- **Auth flow:** the Auth.js routes under `/api/auth/*` and the `/login` / `/signup` forms (Server Actions post to the same origin). No third-party provider domains: only the credentials provider exists.
 - **Images and other external services:** analytics, avatars, link previews, etc. None decided.
 - **Dev vs prod:** development needs `'unsafe-eval'` (React debugging). Production doesn't.
 
@@ -92,7 +94,17 @@ Also worth deciding (documented in the Next.js `headers` reference): `Strict-Tra
 - **Rate-limit sign-in attempts and link creation**, as a minimum.
 - Apply the limit **on the server**: in the Server Action (link creation) and in the sign-in flow. Never only on the client.
 - When the limit is hit, return an **expected** error result with a user-facing message ([`data-mutations.md`](data-mutations.md) §4), not a thrown error.
-- **TBD:** implementation and provider/storage, limits and time windows, the key (user ID, IP, both), where the sign-in limit hooks into Auth.js, and any other actions that need limits. None are decided. **In-memory counters don't work across multiple server instances**, so the choice depends on hosting.
+- **Implemented** in `src/lib/auth/rate-limit.ts`: fixed-window counters in MongoDB (`authattempts`, TTL-expired), updated atomically, so they work across multiple server instances. Keys are SHA-256 hashes; no raw emails or IPs are stored.
+
+  | Limit | Key | Where |
+  | --- | --- | --- |
+  | 5 login attempts / 15 min | email | Credentials `authorize()`, so it also covers direct POSTs to `/api/auth/callback/credentials`. Cleared after a successful login |
+  | 20 login attempts / 15 min | IP | Same |
+  | 5 sign-ups / hour | IP | `signUp` action, after validation |
+
+- **IP caveat:** the IP is the first `x-forwarded-for` entry. That is only trustworthy behind a proxy that sets the header itself (e.g. Vercel). Without one, clients can spoof it, and the per-email limit is the real protection. Confirm when hosting is decided.
+- **Known trade-off:** sign-up says "An account with this email already exists", which reveals registered emails. The sign-up rate limit softens this. Login messages stay generic.
+- **TBD:** limits for link creation and other actions once they exist.
 
 ## 5. Untrusted user content
 
@@ -152,14 +164,14 @@ These don't replace auth checks. Auth.js provides its own CSRF protection for it
 
 | Decision | Status |
 | --- | --- |
-| Env variable names and `.env.example` contents | TBD, except `MONGODB_URI_TEST` (decided, in `.env.test`, see [`testing.md`](testing.md)) |
-| `.gitignore` exception for `.env.example` | TBD (needed when the file is created) |
+| Env variable names and `.env.example` contents | Decided: `MONGODB_URI`, `MONGODB_URI_TEST` (in `.env.test`, see [`testing.md`](testing.md)), `AUTH_SECRET`. Production values TBD |
+| `.gitignore` exception for `.env.example` | Decided: `!.env.example` |
 | Hosting, and need for `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | TBD |
 | CSP strategy (nonce / static / SRI) and directives | TBD |
 | CSP report-only rollout and reporting endpoint | TBD |
 | `X-Frame-Options` and `Referrer-Policy` values | TBD |
 | HSTS, `X-Content-Type-Options`, `Permissions-Policy`, `poweredByHeader` | TBD |
-| Rate-limit implementation, provider, limits, keys | TBD |
+| Rate-limit implementation, provider, limits, keys | Decided for sign-in/sign-up (§4). Other actions TBD |
 | Allowed URL schemes (`https` only?), length limits | TBD |
 | Re-enabling `react/jsx-no-target-blank` | TBD |
 | `serverActions.allowedOrigins` | TBD |

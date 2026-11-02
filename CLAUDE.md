@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-Linkbase is a fresh `create-next-app` scaffold (single commit). There is no app logic, data layer, or test setup yet — `src/app/page.tsx` is still the default starter page.
+Linkbase has a landing page (`/`), a MongoDB connection with `User` and `AuthAttempt` models, and email + password authentication (NextAuth v5): `/login`, `/signup`, a protected placeholder `/dashboard`, and a user menu in the header. Links and public profiles are not built yet, and there is no test setup.
 
 ## Commands
 
@@ -25,7 +25,8 @@ No test runner is configured.
 - Route props use the generated global types (e.g. `LayoutProps<"/">` in `layout.tsx`, likewise `PageProps<...>`), not hand-written prop interfaces.
 - **Tailwind CSS v4**, CSS-first config: no `tailwind.config.js`. Theme tokens live in `src/app/globals.css` via `@theme inline`; CSS is processed through the `@tailwindcss/turbopack` loader configured in `next.config.ts` (not PostCSS). Light/dark colors are CSS variables (`--background`, `--foreground`) switched by `prefers-color-scheme`. The design docs in `Doc/` contain legacy Tailwind v3 config examples; never add a `tailwind.config.js`. See the v4 compatibility note in `Doc/design-system.md` §0.
 - Fonts: Geist / Geist Mono via `next/font/google`, exposed as `--font-geist-sans` / `--font-geist-mono`.
-- **Database (planned, not implemented):** MongoDB + Mongoose, with the connection helper in `src/lib/db/` and models in `src/lib/db/models/`. No database package, code or env config exists yet. See `Doc/database.md` for the connection, schema, index and user-ownership rules before writing any data code.
+- **Database:** MongoDB + Mongoose 9. Connection helper `connectToDatabase()` in `src/lib/db/connect.ts`, models in `src/lib/db/models/`, `MONGODB_URI` in `.env.local`. See `Doc/database.md` for the connection, schema, index and user-ownership rules before writing any data code.
+- **Auth:** NextAuth (Auth.js) `5.0.0-beta.32`, credentials provider, JWT sessions, `AUTH_SECRET` in `.env.local`. Helpers in `src/lib/auth/` (`getCurrentUser()`, `requireUser()`), Proxy in `src/proxy.ts`. Validation with Zod 4 in `src/lib/validation/`. See `Doc/auth.md` before adding a protected page or Server Action.
 
 ## Live Docs (Context7)
 

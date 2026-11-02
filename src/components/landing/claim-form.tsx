@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import type { FormEvent } from "react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 
@@ -11,18 +12,18 @@ type ClaimFormProps = {
 };
 
 /**
- * Username claim field. Placeholder for now: sign-up doesn't exist yet,
- * so submitting keeps focus in the field and sends nothing.
+ * Username claim field. Submitting goes to sign-up. The username isn't carried over yet:
+ * it is picked during onboarding, which is a separate feature.
  */
 export function ClaimForm({ align = "start" }: ClaimFormProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const input = inputRef.current;
-    if (!input) return;
-    input.value = input.value.trim();
-    input.focus();
+    if (input) input.value = input.value.trim();
+    router.push("/signup");
   }
 
   return (

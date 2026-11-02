@@ -32,7 +32,7 @@ This guide is for implementing Linkbase's components and screens in **Next.js + 
 
 The readme lists these as **DS additions**: Icon, Wordmark, Checkbox, Select, Toast, Tooltip, Dialog and Badge.
 
-**Not in the system. Don't build these as DS components without a design decision:** Radio, Textarea, dropdown/menu (all kebab buttons have no menu), Popover, Skeleton/Spinner component, Pagination, Breadcrumbs, Table, Progress, file/image upload, colour picker, drag-and-drop reorder behaviour (only the handle glyph exists), bottom-tab-bar component (the kit composes it from SideNavItem), and a footer component (the kit composes it inline).
+**Not in the system. Don't build these as DS components without a design decision:** Radio, Textarea, dropdown/menu (all kebab buttons have no menu; the one decided exception is the account **UserMenu**, §4.6), Popover, Skeleton/Spinner component, Pagination, Breadcrumbs, Table, Progress, file/image upload, colour picker, drag-and-drop reorder behaviour (only the handle glyph exists), bottom-tab-bar component (the kit composes it from SideNavItem), and a footer component (the kit composes it inline).
 
 ---
 
@@ -249,6 +249,8 @@ The marketing top navigation, rendered as `<nav>`.
 - Nav items are `<button>`s. Proposed (impl.): use `next/link` anchors.
 - The menu has no `aria-controls`, no Escape-to-close, and doesn't close on outside click.
 
+**Implementation (Linkbase):** `src/components/ui/site-nav.tsx` takes `links`, `actions` (right-hand slot) and `menuFooter` (bottom of the compact menu). Links use anchors and the Wordmark links to `/`. The compact menu (`mobile-menu.tsx`) has `aria-controls`, closes on Escape and outside click, and only renders when there are links. On the landing page, `actions` is `HeaderAuth`: Log in / Sign up for visitors, or the UserMenu (§4.6) when signed in. It streams in behind `<Suspense>` with an empty placeholder, so signed-in users never see a "Log in" flash.
+
 ### 4.2 AnnouncementBar: Confirmed (dark upsell band is Reference-observed)
 A full-width promo or upsell band with `role="region" aria-label="Announcement"`.
 
@@ -304,6 +306,24 @@ Shows the user's Linkbase URL, with an optional action.
 | `action` | **`share`** · `copy` · `close` · `null`. Renders a 36px circular button with aria-label "Share" / "Copy link" / "Dismiss". |
 
 Padding 0 8 0 20, gap 10, pill radius, `--text-body` at 500 weight.
+
+### 4.6 UserMenu: DS addition (design decision with the auth feature)
+The signed-in user's account dropdown in the SiteNav. `src/components/auth/user-menu.tsx` (Client Component).
+
+| Prop | Values |
+|---|---|
+| `name` · `email` | Only these two fields cross to the client |
+
+- **Trigger:** Avatar 40 (initials) + 18px `chevron-down` (rotates when open). Press `scale(.94)`. `aria-haspopup="menu"`, `aria-expanded`, `aria-controls`, `aria-label="Account menu for {name}"`.
+- **Panel:** 12px below the trigger, right-aligned, width 280 (max viewport − 24). White, `--radius-xl`, `--shadow-lg`, padding 12, gap 4, the same as the SiteNav compact menu.
+- **Contents:** name (`--text-body`, 600) and email (`--text-body-sm`, `--text-secondary`), a hairline divider, then menu items: **Dashboard** (`layout-dashboard`) and **Sign out** (`log-out`, a form posting to `logOut`; shows "Signing out…" while pending).
+- **Items:** height 48, padding 0 14, `--radius-md`, `--text-body` 500, 20px icon, gap 12. Hover/focus background `--surface-fill`.
+- **Keyboard (WAI-ARIA menu button):** opening moves focus to the first item. ↓/↑ move with wrap-around, Home/End jump, Escape closes and returns focus to the trigger, Tab closes and moves on. Outside click closes. ↓/↑ on the trigger opens it.
+
+### Implementation notes from the auth feature
+- `Input` (`src/components/ui/input.tsx`) implements §3.1 with `label`, `error` and `helperText`, and fixes accessibility gap 3: the message is linked with `aria-describedby`.
+- `Button` gained `disabled` and `loading` (§1.1). A disabled `href` button renders as `<button disabled>`; internal links use `next/link`.
+- Auth pages (`/login`, `/signup`) use the Welcome form column (§7.2) without the art panel: Wordmark 30, centred form max-width 440.
 
 ---
 

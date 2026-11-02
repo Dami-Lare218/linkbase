@@ -2,29 +2,37 @@
 
 How Linkbase code is organised and named. Read this before adding a route, component, shared module or Server Action.
 
-> **Status:** Most of this document describes the **intended** architecture. The project is still a fresh `create-next-app` scaffold. Section 1 lists what exists today; everything else is a convention to follow as code is added. Undecided items are marked **TBD**. Do not fill them in without an explicit decision.
+> **Status:** Section 1 lists what exists today. The rest are conventions to follow as code is added. Undecided items are marked **TBD**. Do not fill them in without an explicit decision.
 
 ## 1. What exists today
 
 ```
 src/
+  proxy.ts                 # Auth.js optimistic redirects (auth.md §4)
   app/
-    layout.tsx     # root layout (Geist fonts, globals.css)
-    page.tsx       # default starter page
-    globals.css    # Tailwind v4 import + theme tokens
-    favicon.ico
+    layout.tsx             # root layout (Archivo + Geist fonts, globals.css)
+    page.tsx               # / landing page
+    globals.css            # Tailwind v4 import + theme mappings
+    (auth)/                # /login, /signup, layout, actions.ts (signUp, logIn, logOut)
+    (dashboard)/           # layout (SiteNav) + dashboard/page.tsx (/dashboard)
+    api/auth/[...nextauth]/route.ts   # Auth.js route handler
+  components/
+    ui/                    # Button, Input, Avatar, Wordmark, SiteNav, MobileMenu, …
+    landing/               # landing page sections
+    auth/                  # login/signup forms, HeaderAuth, UserMenu
   lib/
-    db/
-      connect.ts   # cached MongoDB connection (connectToDatabase)
-public/            # starter SVGs
-Doc/               # project docs
+    auth/                  # Auth.js config, session helpers, password, rate limit
+    db/                    # connect.ts + models/ (User, AuthAttempt)
+    validation/            # Zod schemas (auth.ts)
+    types/                 # shared types (FormState, Auth.js session type)
+  styles/tokens.css        # design tokens
+Doc/                       # project docs
 ```
 
-- Next.js 16.4.3, React 19.3.0, Tailwind CSS v4. Database: `mongoose` ^9 and `server-only`.
+- Next.js 16.4.3, React 19.3.0, Tailwind CSS v4. Data: `mongoose` ^9, `server-only`. Auth: `next-auth` 5 (beta), `bcryptjs`. Validation: `zod` 4. Icons: `lucide-react`.
 - `next.config.ts` enables `cacheComponents` and `partialPrefetching`.
 - Import alias `@/*` → `src/*`.
-- `src/lib/db/connect.ts`: the MongoDB connection helper `connectToDatabase()` ([`database.md`](database.md) §4). No models yet.
-- **Not present yet:** `src/components/`, Server Actions, database models, authentication, API routes and tests.
+- **Not present yet:** tests, links and public profiles.
 
 ## 2. Routing: App Router
 
@@ -52,8 +60,9 @@ src/
     [feature]/          # components for one feature only
   lib/
     db/                 # database connection helper + models/ (planned, see database.md)
-    <auth>/             # auth helpers (planned, see auth.md; folder name TBD)
-    <types>/            # shared TypeScript types
+    auth/               # auth helpers (see auth.md)
+    validation/         # Zod schemas
+    types/              # shared TypeScript types
 ```
 
 | Location | Holds | Rule |
@@ -63,9 +72,8 @@ src/
 | `lib/` | Shared non-UI code | Database client, auth helpers and shared types each get **their own folder**. |
 
 **TBD:**
-- Auth and types folder names inside `lib/` (`<auth>`, `<types>` above are placeholders). The database folder is planned as `lib/db/`, see [`database.md`](database.md).
 - The list of features, which sets the `components/[feature]/` folders.
-- Where Server Action files live (for example co-located with routes or in a shared folder).
+- Where Server Action files live in general. So far they sit beside their route group (`src/app/(auth)/actions.ts`).
 - Where tests live (no test runner is configured).
 
 ## 5. Naming
@@ -89,12 +97,13 @@ src/
 
 | Decision | Status |
 | --- | --- |
-| Database / ORM provider | Planned: MongoDB + Mongoose, not implemented. See [`database.md`](database.md) |
-| Authentication provider | Planned: NextAuth (Auth.js), not implemented. See [`auth.md`](auth.md) (providers, session strategy and config still TBD there) |
+| Database / ORM provider | Decided: MongoDB + Mongoose. See [`database.md`](database.md) |
+| Authentication provider | Decided: NextAuth (Auth.js) v5, email + password, JWT sessions. See [`auth.md`](auth.md) |
 | API surface (Route Handlers, external APIs) | TBD |
-| Validation library | Planned: Zod at the Server Action boundary, schemas in `src/lib/validation/`. Not installed. See [`errors-and-validation.md`](errors-and-validation.md) |
+| Validation library | Decided: Zod 4 at the Server Action boundary, schemas in `src/lib/validation/`. See [`errors-and-validation.md`](errors-and-validation.md) |
 | Test runner and test location | TBD |
 | Hosting / deployment target | TBD |
-| `lib/` auth/types folder names and Server Action file location | TBD (`lib/db/` is planned, see [`database.md`](database.md)) |
+| `lib/` folder names | Decided: `auth/`, `db/`, `validation/`, `types/` |
+| Server Action file location | TBD in general (auth actions: `src/app/(auth)/actions.ts`) |
 
 Update this table and the sections above when a decision is made.

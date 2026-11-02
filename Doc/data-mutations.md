@@ -2,15 +2,15 @@
 
 How Linkbase writes data. Read this before writing or changing any Server Action, or anything that creates, updates or deletes data.
 
-> **Status: planned, not implemented.** No Server Actions, auth, database models, Zod schemas or revalidation exist yet. Section 1 describes the current state. Everything after it is a planned convention. Undecided details are marked **TBD**.
+> **Status: partly implemented.** The auth actions exist. No data-owning actions or revalidation exist yet. Section 1 describes the current state. Everything after it is the convention to follow. Undecided details are marked **TBD**.
 >
 > This doc ties together: [`architecture.md`](architecture.md) (naming, location), [`auth.md`](auth.md) (session, ownership), [`database.md`](database.md) (models, `userId` scoping), [`errors-and-validation.md`](errors-and-validation.md) (Zod, results, unexpected errors), [`data-fetching.md`](data-fetching.md) (cache tags, invalidation). If they disagree, fix the docs. Don't pick one silently.
 
 ## 1. What exists today
 
-- No `"use server"` code anywhere in `src/`.
-- No `next-auth`, `mongoose` or `zod` in `package.json`.
-- No `src/lib/`, no models, no validation schemas, no forms.
+- `src/app/(auth)/actions.ts`: `signUp`, `logIn`, `logOut`. They are public (no session needed), so they skip step 1 below, but follow validate → write → typed result.
+- Building blocks: `getCurrentUser()` (`src/lib/auth/session.ts`), Zod schemas (`src/lib/validation/`), `FormState` (`src/lib/types/action-result.ts`), `connectToDatabase()` and the `User` model.
+- No data-owning actions (links) and no revalidation yet.
 
 ## 2. Server Actions for all writes
 
@@ -25,7 +25,7 @@ Every Server Action that touches private data runs these steps **in this order**
 
 | # | Step | On failure | Reference |
 | --- | --- | --- | --- |
-| 1 | **Authenticate.** Get `userId` from the server-side session | Stop. Return the unauthenticated result (shape TBD) | [`auth.md`](auth.md) §4, §6 |
+| 1 | **Authenticate.** Get `userId` from the server-side session (`getCurrentUser()`) | Stop. Return `{ ok: false, message: "Log in to continue." }` | [`auth.md`](auth.md) §4, §6 |
 | 2 | **Validate.** Run the matching Zod schema with `safeParse` over all submitted input, including IDs | Return a validation-error result with per-field messages | [`errors-and-validation.md`](errors-and-validation.md) §3–4 |
 | 3 | **Check ownership.** The target document must belong to `userId` | Return "not found". Same reply whether it's missing or someone else's | [`database.md`](database.md) §7 |
 | 4 | **Write.** Connect (cached connection) and run the `userId`-scoped write | Expected business-rule failure → return an error result. Anything else → throw | [`database.md`](database.md) §4 |
@@ -45,27 +45,29 @@ Every Server Action that touches private data runs these steps **in this order**
 ```ts
 "use server";
 
-export async function deleteLink(prevState: unknown, formData: FormData) {
-  const userId = await requireUser();                       // 1. authenticate
-  const parsed = deleteLinkSchema.safeParse(/* fields */);  // 2. validate
-  if (!parsed.success) return /* validation-error result */;
+export async function deleteLink(_prev: FormState<"id">, formData: FormData): Promise<FormState<"id">> {
+  const user = await getCurrentUser();                       // 1. authenticate
+  if (!user) return { ok: false, message: "Log in to continue." };
+
+  const parsed = deleteLinkSchema.safeParse({ id: formData.get("id") }); // 2. validate
+  if (!parsed.success) return { ok: false, fieldErrors: z.flattenError(parsed.error).fieldErrors };
 
   await connectToDatabase();
-  const res = await Link.deleteOne({ _id: parsed.data.id, userId }); // 3 + 4
-  if (res.deletedCount === 0) return /* not-found result */;
+  const res = await Link.deleteOne({ _id: parsed.data.id, userId: user.id }); // 3 + 4
+  if (res.deletedCount === 0) return { ok: false, message: "Link not found." };
 
   /* 5. revalidate (see §5) */
-  return /* success result */;
+  return { ok: true };
 }
 ```
 
-`requireUser`, `deleteLinkSchema`, `connectToDatabase`, `Link` and the result shapes are **placeholders**. None are decided. `prevState` is there because forms call actions through `useActionState` ([`errors-and-validation.md`](errors-and-validation.md) §4).
+`getCurrentUser`, `connectToDatabase` and `FormState` exist. `deleteLink`, `deleteLinkSchema` and `Link` are **placeholders**. `prevState` is there because forms call actions through `useActionState` ([`errors-and-validation.md`](errors-and-validation.md) §4).
 
 ## 4. Expected vs unexpected failures
 
 | Failure | Kind | Handling |
 | --- | --- | --- |
-| Not signed in | Expected | Return the unauthenticated result (shape TBD, [`auth.md`](auth.md) §6) |
+| Not signed in | Expected | Return `{ ok: false, message }` ([`auth.md`](auth.md) §6) |
 | Invalid input | Expected | Return per-field validation errors |
 | Business-rule failure (e.g. a value that must be unique is taken) | Expected | Return an error result with a user-facing message |
 | Not found / not the user's | Expected | Return "not found" |
@@ -100,7 +102,7 @@ Revalidate **only after the write succeeds**. Never after validation or ownershi
 - One shared result type is used by all actions and forms ([`errors-and-validation.md`](errors-and-validation.md) §4).
 - Success data returns only the fields the client needs, as plain objects, never Mongoose documents ([`data-fetching.md`](data-fetching.md) §3).
 
-**TBD:** the exact result shape and where its type lives. Don't invent one per action.
+**Decided:** `FormState` in `src/lib/types/action-result.ts` ([`errors-and-validation.md`](errors-and-validation.md) §4). Use it for every action. Don't invent one per action.
 
 ## 7. Checklist for a new Server Action
 
@@ -118,9 +120,9 @@ Revalidate **only after the write succeeds**. Never after validation or ownershi
 
 | Decision | Status |
 | --- | --- |
-| Server Action file location | TBD |
-| Result type shape and location | TBD |
-| Unauthenticated result shape | TBD |
+| Server Action file location | TBD in general (auth: `src/app/(auth)/actions.ts`) |
+| Result type shape and location | Decided: `FormState`, `src/lib/types/action-result.ts` |
+| Unauthenticated result shape | Decided: `{ ok: false, message }` |
 | Business rules and their error messages | TBD |
 | Tag naming, and which mutations invalidate which tags/paths | TBD |
 | `updateTag` vs `revalidateTag` vs `revalidatePath` per mutation | TBD (default for own edits: `updateTag`, per [`data-fetching.md`](data-fetching.md)) |
