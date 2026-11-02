@@ -2,17 +2,17 @@
 
 How Linkbase is tested: Vitest unit tests for pure logic, and Playwright MCP-driven QA for end-to-end behaviour against an isolated test database. Read this before writing a test, running QA, or touching test environment config.
 
-> **Status: planned, mostly not set up.** A test database and the `write-tests` skill exist; Vitest and `run-qa-suite` don't. Section 1 lists what is actually available. Everything else is a planned convention. Undecided details are marked **TBD**. Related: [`errors-and-validation.md`](errors-and-validation.md) (Zod schemas), [`data-mutations.md`](data-mutations.md) (Server Actions), [`database.md`](database.md), [`security.md`](security.md) (secrets, env files).
+> **Status: unit tests set up; end-to-end QA still manual.** Vitest is installed and configured, with passing unit tests for the auth validation schemas. A test database and the `write-tests` skill exist. The `run-qa-suite` skill and Playwright MCP QA automation don't exist yet. Section 1 lists what is actually available. Everything else is a planned convention. Undecided details are marked **TBD**. Related: [`errors-and-validation.md`](errors-and-validation.md) (Zod schemas), [`data-mutations.md`](data-mutations.md) (Server Actions), [`database.md`](database.md), [`security.md`](security.md) (secrets, env files).
 
 ## 1. What exists today (verified)
 
 | Item | State |
 | --- | --- |
-| **Vitest** | **Not installed.** Not in `package.json` or `node_modules`, no config |
-| `test` script in `package.json` | None |
-| Test files (`*.test.ts`, `*.spec.ts`) | None |
-| **Playwright MCP** | **Available to Claude Code** as a user-level plugin (`playwright@claude-plugins-official`). Not configured in this repo: no `.mcp.json`, and nothing in `.claude/settings.json` |
-| **`write-tests` skill** | **Exists** in `.claude/skills/write-tests/`. Writes Vitest unit tests following this doc; doesn't run them. Stops and asks first while Vitest isn't installed |
+| **Vitest** | **Installed and configured:** `vitest` 4.1.12 (dev dependency), config in `vitest.config.mts` (§2) |
+| `test` script in `package.json` | `npm run test` → `vitest run` (runs once, no watch mode) |
+| Test files | `src/lib/validation/auth.test.ts`: 39 unit tests for `signUpSchema` and `logInSchema`, all passing. Unit tests only, no MongoDB or other database access. No `*.spec.ts` files |
+| **Playwright MCP** | **Available to Claude Code** as a user-level plugin (`playwright@claude-plugins-official`). Not configured in this repo: no `.mcp.json`, and nothing in `.claude/settings.json`. No QA automation uses it yet |
+| **`write-tests` skill** | **Exists** in `.claude/skills/write-tests/`. Writes Vitest unit tests following this doc; doesn't run them, run QA or commit |
 | **`run-qa-suite` skill** | **Does not exist.** Not in `.claude/`, not in user skills, not among loaded skills |
 | `.env.test` | Does not exist. If created, it is Git-ignored by the `.env*` rule in `.gitignore` |
 | `MONGODB_URI_TEST` | Placeholder in `.env.example` only. **No code reads it**: `connectToDatabase()` in `src/lib/db/connect.ts` reads `MONGODB_URI` only |
@@ -35,7 +35,18 @@ How Linkbase is tested: Vitest unit tests for pure logic, and Playwright MCP-dri
 - **Don't unit-test Server Actions by mocking** auth, the database or Next.js. They're covered by QA (§3).
 - Follow [`coding-standards.md`](coding-standards.md) (TypeScript strict, no `any`, `async`/`await`).
 
-**TBD:** Vitest version and install, config file and settings (environment, resolving the `@/*` → `src/*` alias), `test` script name, coverage tooling, and whether CI runs it (no CI exists).
+### Setup (decided)
+
+- **Version:** `vitest` 4.1.12. Vitest 5 needs `@types/node` 22+, and the project uses `@types/node` 20.
+- **Config:** `vitest.config.mts` at the project root:
+  - `test.environment: "node"`: no browser or DOM, since components aren't unit-tested.
+  - `test.include: ["src/**/*.test.ts"]`: only `*.test.ts` files under `src/`, so `*.spec.ts` files are never collected.
+  - `resolve.tsconfigPaths: true`: Vite 8's built-in tsconfig path resolution, so `@/*` → `src/*` works in tests exactly as in app code. No `vite-tsconfig-paths` plugin.
+- **Run:** `npm run test` (`vitest run`). It runs once and exits.
+- **Unit tests never touch MongoDB.** Nothing a unit test imports may call `connectToDatabase()`, read `process.env`, or use Mongoose models. Database behaviour is covered by QA (§3, §4).
+- **Existing tests:** `src/lib/validation/auth.test.ts` covers valid input, normalisation (trimming, lowercased email, passwords kept as typed, unknown fields dropped), the first field-level message each form shows, and length limits (including the 72-byte password limit).
+
+**TBD:** coverage tooling and thresholds, and whether CI runs the tests (no CI exists).
 
 ## 3. End-to-end QA: Playwright MCP
 
@@ -99,7 +110,7 @@ The error message must name the problem **without printing the value**.
 
 | Decision | Status |
 | --- | --- |
-| Install Vitest, version, config file, `test` script | TBD |
+| Install Vitest, version, config file, `test` script | **Decided:** Vitest 4.1.12, `vitest.config.mts`, `npm run test` (§2) |
 | Coverage tooling and thresholds | TBD |
 | Create the `run-qa-suite` skill, its flows and reporting | TBD |
 | Declare Playwright MCP at project level or keep user-level | TBD |
