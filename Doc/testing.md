@@ -2,7 +2,7 @@
 
 How Linkbase is tested: Vitest unit tests for pure logic, and Playwright MCP-driven QA for end-to-end behaviour against an isolated test database. Read this before writing a test, running QA, or touching test environment config.
 
-> **Status: planned, mostly not set up.** Section 1 lists what is actually available. Everything else is a planned convention. Undecided details are marked **TBD**. Related: [`errors-and-validation.md`](errors-and-validation.md) (Zod schemas), [`data-mutations.md`](data-mutations.md) (Server Actions), [`database.md`](database.md), [`security.md`](security.md) (secrets, env files).
+> **Status: planned, mostly not set up.** A test database and the `write-tests` skill exist; Vitest and `run-qa-suite` don't. Section 1 lists what is actually available. Everything else is a planned convention. Undecided details are marked **TBD**. Related: [`errors-and-validation.md`](errors-and-validation.md) (Zod schemas), [`data-mutations.md`](data-mutations.md) (Server Actions), [`database.md`](database.md), [`security.md`](security.md) (secrets, env files).
 
 ## 1. What exists today (verified)
 
@@ -12,10 +12,12 @@ How Linkbase is tested: Vitest unit tests for pure logic, and Playwright MCP-dri
 | `test` script in `package.json` | None |
 | Test files (`*.test.ts`, `*.spec.ts`) | None |
 | **Playwright MCP** | **Available to Claude Code** as a user-level plugin (`playwright@claude-plugins-official`). Not configured in this repo: no `.mcp.json`, and nothing in `.claude/settings.json` |
+| **`write-tests` skill** | **Exists** in `.claude/skills/write-tests/`. Writes Vitest unit tests following this doc; doesn't run them. Stops and asks first while Vitest isn't installed |
 | **`run-qa-suite` skill** | **Does not exist.** Not in `.claude/`, not in user skills, not among loaded skills |
 | `.env.test` | Does not exist. If created, it is Git-ignored by the `.env*` rule in `.gitignore` |
-| Test database | None. No database code exists yet ([`database.md`](database.md)) |
-| Zod | Not installed ([`errors-and-validation.md`](errors-and-validation.md) §1) |
+| `MONGODB_URI_TEST` | Placeholder in `.env.example` only. **No code reads it**: `connectToDatabase()` in `src/lib/db/connect.ts` reads `MONGODB_URI` only |
+| Test database | **Exists:** a separate MongoDB Atlas database, `linkbase_test`, used for the manual auth QA. Not yet reached through the `MONGODB_URI_TEST` convention (see §4) |
+| Zod | Installed (Zod 4), schemas in `src/lib/validation/` ([`errors-and-validation.md`](errors-and-validation.md)) |
 
 ## 2. Unit tests: Vitest
 
@@ -67,9 +69,14 @@ QA lives in the skill and MCP sessions, not in a Playwright test-runner setup.
 
 Before any QA touches data, decide:
 - how the server under QA is started so it reads `.env.test`, and
-- how the connection helper ([`database.md`](database.md) §4) uses `MONGODB_URI_TEST` in that mode. The dev variable name is still TBD.
+- how the connection helper ([`database.md`](database.md) §4) uses `MONGODB_URI_TEST` in that mode. The dev variable is `MONGODB_URI` (in `.env.local`).
 
 Both are **TBD**.
+
+**Interim method (used for the manual auth QA, not the target convention):** a temporary, Git-ignored `.env.development.local` sets `MONGODB_URI` to the `linkbase_test` database. For `next dev`, Next.js checks `.env.development.local` before `.env.local`, so it overrides the dev database without editing `.env.local`.
+- While the file exists, **every** `npm run dev` uses the test database. Delete it after QA and restart the dev server.
+- `next build` / `next start` run in production mode and ignore it.
+- It has none of the fail-safe checks below. Replace it with the `MONGODB_URI_TEST` convention once the TBDs above are decided.
 
 ### Fail safely
 
