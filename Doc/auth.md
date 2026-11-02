@@ -2,46 +2,53 @@
 
 How Linkbase will sign users in and make sure each user can only reach their own data. Read this before adding a protected route, a Server Action, a public page or any query on user data.
 
-> **Status: planned, not implemented.** No auth code, packages, routes or config exist yet. Section 1 describes the current state. Everything after it is the intended design. Undecided details are marked **TBD**. Related docs: [`architecture.md`](architecture.md) (structure, naming) and [`database.md`](database.md) (MongoDB + Mongoose, `userId` scoping).
+> **Status: implemented (email + password).** Sections 1–2 describe what exists. The layer model in §4 onwards is the rule for all new code. Remaining undecided details are marked **TBD**. Related docs: [`architecture.md`](architecture.md) (structure, naming) and [`database.md`](database.md) (MongoDB + Mongoose, `userId` scoping).
 
 ## 1. What exists today
 
-- No `next-auth` / Auth.js package in `package.json`.
-- No auth config, sign-in page, session handling or `proxy.ts`.
-- Routes in `src/app/`: only the starter `layout.tsx` and `page.tsx` (`/`).
-- **Not present yet:** the dashboard route group, `/user/[handle]`, Server Actions and database code.
-
-## 2. Stack
-
-- **NextAuth (Auth.js)** handles sign-in, sessions and auth security (cookies, CSRF, token signing).
-- Auth helpers live under `src/lib/` in the auth folder from [`architecture.md`](architecture.md) §4. The folder name is still TBD and written `src/lib/<auth>/` here.
-
-**TBD:**
-
-| Decision | Status |
+| Piece | Where |
 | --- | --- |
-| Auth.js version | TBD |
-| Sign-in providers (OAuth, email, credentials, …) | TBD |
-| Session strategy (JWT or database sessions) | TBD |
-| Database adapter, if database sessions are used | TBD. Must work with the MongoDB setup in [`database.md`](database.md) |
-| Environment variable names (secret, provider keys) | TBD. Follow the Auth.js docs for the chosen version |
-| Auth config file location and Auth.js route handler path | TBD. Follow the Auth.js docs for the chosen version |
-| Sign-in / sign-out page URLs | TBD |
-| How the session exposes `userId` | TBD |
+| Auth.js setup (Credentials provider), exports `handlers`, `auth`, `signIn`, `signOut` | `src/lib/auth/auth.ts` |
+| Database-free settings: pages, session, callbacks, logger. Used alone by Proxy | `src/lib/auth/config.ts` |
+| `getCurrentUser()` (React `cache()`), `requireUser()` | `src/lib/auth/session.ts` |
+| bcrypt hashing and timing-safe check | `src/lib/auth/password.ts` |
+| MongoDB-backed rate limiter | `src/lib/auth/rate-limit.ts` |
+| Proxy (optimistic redirects) | `src/proxy.ts` |
+| Auth.js route handler | `src/app/api/auth/[...nextauth]/route.ts` |
+| Server Actions `signUp`, `logIn`, `logOut` | `src/app/(auth)/actions.ts` |
+| Pages | `/login`, `/signup` in `(auth)`; `/dashboard` in `(dashboard)` |
+| Header UI | `src/components/auth/header-auth.tsx`, `user-menu.tsx` |
+| Session type (`session.user.id`) | `src/lib/types/next-auth.d.ts` |
 
-Once installed, check the Auth.js docs for that exact version. Its setup differs between major versions.
+Not built yet: email verification, password reset, account deletion, handle onboarding, OAuth providers.
 
-## 3. Routes (proposed)
+## 2. Stack (decided)
 
-| Proposed file location | URL | Access |
+| Decision | Value |
+| --- | --- |
+| Auth.js version | `next-auth@5.0.0-beta.32`, pinned exactly. v5 is still beta; check its release notes before upgrading |
+| Providers | Credentials (email + password) only |
+| Session strategy | JWT (encrypted cookie). Credentials sign-in requires it. No database adapter |
+| Session lifetime | `maxAge` 30 days, refreshed at most every 24 hours (`updateAge`) |
+| Env vars | `AUTH_SECRET` (required). `AUTH_TRUST_HOST=true` only when self-hosting behind a reverse proxy |
+| Passwords | `bcryptjs`, cost 12. 8 characters minimum, 72 **bytes** maximum (bcrypt ignores the rest). No composition rules |
+| Sign-in / sign-up URLs | `/login`, `/signup`. Sign-out is the `logOut` action, back to `/` |
+| How the session exposes `userId` | `session.user.id`: the user's MongoDB `_id` as a string, copied into the JWT at sign-in |
+| Auth helper folder | `src/lib/auth/` |
+
+Because sessions are JWTs, a session isn't checked against the database on each request. A deleted user stays signed in until the cookie expires.
+
+## 3. Routes
+
+| File location | URL | Access |
 | --- | --- | --- |
-| `src/app/(dashboard)/…` | TBD (see note) | **Signed-in users only.** Protected by default |
-| `src/app/user/[handle]/page.tsx` | `/user/[handle]` | **Public.** No sign-in needed |
-| `src/app/page.tsx` (exists) | `/` | Public. Contents TBD |
+| `src/app/(dashboard)/dashboard/…` | `/dashboard` and below | **Signed-in users only** |
+| `src/app/(auth)/login`, `(auth)/signup` | `/login`, `/signup` | Public. Signed-in visitors are redirected to `/dashboard` by Proxy |
+| `src/app/user/[handle]/page.tsx` (planned) | `/user/[handle]` | **Public.** No sign-in needed |
+| `src/app/page.tsx` | `/` | Public landing page |
 
-- `(dashboard)` is a proposed **route group**. The group name is TBD.
-- **Route groups don't add a URL segment.** `src/app/(dashboard)/links/page.tsx` serves `/links`, not `/dashboard/links`. Proxy matches URLs, not folders, so the protected **URL prefix** must be decided (e.g. a real `dashboard/` folder inside the group). URL prefix: **TBD**.
-- Every new route inside the dashboard group is protected without extra work (see §4). A new public route must be added on purpose.
+- **Route groups don't add a URL segment.** `src/app/(dashboard)/links/page.tsx` would serve `/links`, not `/dashboard/links`. Put every dashboard page under the real `dashboard/` folder inside the group so it gets the protected **`/dashboard` prefix** that Proxy matches.
+- Every dashboard page still calls `requireUser()` itself (§4). A new public route must be added on purpose.
 
 ## 4. How the layers work together
 
@@ -68,17 +75,16 @@ Request
 - It redirects signed-out visitors away from dashboard URLs early, for a better experience.
 - Keep it fast. **Don't query the database in Proxy.** Check only for a session.
 - It is **not a security boundary.** Matchers can miss routes, and Server Actions are POST requests to the page they're used on. Layers 2 and 3 still apply.
-- How Auth.js plugs into Proxy depends on the version: **TBD**.
+- **Implemented:** `src/proxy.ts` builds Auth.js from `authConfig` alone (no Mongoose) and exports its `auth` as `proxy`. The `authorized` callback in `config.ts` decides: no session on `/dashboard/*` → `/login?callbackUrl=<path>`; session on `/login` or `/signup` → `/dashboard`. Matcher: `/dashboard/:path*`, `/login`, `/signup`.
 
 ### Layer 2: Auth helper in server code (required)
 
-Create one helper in `src/lib/<auth>/` (name TBD; `requireUser` below is a placeholder). It:
+`src/lib/auth/session.ts` provides:
 
-1. Reads the Auth.js session on the server.
-2. If there is no valid session, stops the request: redirect for pages, error result for actions (see §6).
-3. Returns the verified `userId`.
+- `getCurrentUser()`: reads the Auth.js session and returns `{ id, name, email }` or `null`. Wrapped in React's `cache()`, so a request reads the session only once.
+- `requireUser()`: the same user, or `redirect("/login")` when there is no valid session.
 
-Wrap it in React's `cache()` so a request reads the session only once.
+Use `requireUser()` in pages. In Server Actions, call `getCurrentUser()` and return an error result when it's `null` (a redirect from an action is fine too, but must sit outside `try`).
 
 Call it in:
 - **Every dashboard page** (or the data functions those pages use).
@@ -102,17 +108,19 @@ Every Server Action that touches user data follows these steps:
 ```ts
 "use server";
 
-export async function deleteLink(linkId: string) {
-  const userId = await requireUser();        // 1. auth: stop if signed out
-  // 2. validate input with Zod safeParse (planned, see errors-and-validation.md)
-  await connectToDatabase();                 // 3. cached connection (database.md §4)
-  const result = await Link.deleteOne({ _id: linkId, userId }); // 4. ownership in the filter
-  if (result.deletedCount === 0) return { error: "Not found" }; // 5. same reply for missing and not-yours
+export async function deleteLink(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await getCurrentUser();                         // 1. auth: stop if signed out
+  if (!user) return { ok: false, message: "Log in to continue." };
+  // 2. validate formData with Zod safeParse, giving linkId (see errors-and-validation.md)
+  await connectToDatabase();                                    // 3. cached connection (database.md §4)
+  const result = await Link.deleteOne({ _id: linkId, userId: user.id }); // 4. ownership in the filter
+  if (result.deletedCount === 0) return { ok: false, message: "Not found." }; // 5. same reply for missing and not-yours
   // 6. revalidate affected data (strategy TBD)
+  return { ok: true };
 }
 ```
 
-`requireUser`, `connectToDatabase`, `Link` and the return shape are placeholders. The real names, model and fields are TBD. Validation (Zod, not yet installed) and the typed result follow [`errors-and-validation.md`](errors-and-validation.md) §3–4. The result shape is still TBD there.
+`getCurrentUser` (`src/lib/auth/session.ts`), `connectToDatabase` and `FormState` (`src/lib/types/action-result.ts`) exist. `Link` and `deleteLink` are placeholders.
 
 Rules:
 - **Never accept `userId` as an argument or a form field.** It always comes from the session.
@@ -123,9 +131,9 @@ Rules:
 
 | Where | No valid session → |
 | --- | --- |
-| Proxy, on a dashboard URL | Redirect to the sign-in page (URL TBD). Whether to keep a return URL is TBD |
-| Dashboard page / Server Component | `redirect()` to sign-in from `next/navigation` |
-| Server Action | Stop before any database work. Return an error result or throw (shape TBD). Never return partial data |
+| Proxy, on a dashboard URL | Redirect to `/login?callbackUrl=<path>`. After login the user returns there. `logIn` only accepts same-site paths (`/…`, not `//…`), otherwise `/dashboard` |
+| Dashboard page / Server Component | `requireUser()` → `redirect("/login")` |
+| Server Action | Stop before any database work. Return `{ ok: false, message }` (`FormState`). Never return partial data |
 | Route Handler | Respond `401` |
 | Signed in, but the document isn't theirs | Respond as "not found". Don't reveal that it exists |
 
@@ -154,14 +162,15 @@ Rules:
 
 | Decision | Status |
 | --- | --- |
-| Auth.js version, providers, session strategy, adapter | TBD |
-| Env var names, config file location, Auth.js route handler path | TBD |
-| Sign-in / sign-out URLs, return-URL behaviour | TBD |
-| Dashboard route group name and protected URL prefix | TBD |
-| Whether to add `src/proxy.ts`, and its Auth.js integration | TBD |
-| Auth helper name and `src/lib/` auth folder name | TBD |
-| How the session exposes `userId`, and its type | TBD (see [`database.md`](database.md)) |
-| Server Action error shape | TBD |
+| Auth.js version, providers, session strategy, adapter | Decided (§2) |
+| Env var names, config file location, Auth.js route handler path | Decided (§1–2) |
+| Sign-in / sign-out URLs, return-URL behaviour | Decided (§2, §6) |
+| Dashboard route group name and protected URL prefix | Decided: `(dashboard)`, `/dashboard` (§3) |
+| `src/proxy.ts` and its Auth.js integration | Decided (§4, layer 1) |
+| Auth helper names and folder | Decided: `getCurrentUser` / `requireUser` in `src/lib/auth/` |
+| How the session exposes `userId`, and its type | Decided: `session.user.id`, a string of the MongoDB `_id` |
+| Server Action error shape | Decided: `FormState` (`src/lib/types/action-result.ts`) |
+| Email verification, password reset, account deletion, OAuth | TBD (not built) |
 | Use of experimental `unauthorized()` / `forbidden()` | TBD |
 | Public profile fields | TBD |
 | Revalidation after mutations | TBD |

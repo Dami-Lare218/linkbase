@@ -2,51 +2,54 @@
 
 How Linkbase routes are organised in the App Router. Read this before adding or moving a route, layout, loading/error file, Route Handler or Server Action.
 
-> **Status:** Only the root layout and starter home page exist. Everything else here is **planned**. Undecided details are marked **TBD**. Related: [`architecture.md`](architecture.md) (structure), [`auth.md`](auth.md) (route protection), [`coding-standards.md`](coding-standards.md) (exports and naming).
+> **Status:** The landing page, auth pages and dashboard exist (§1). Everything else here is **planned**. Undecided details are marked **TBD**. Related: [`architecture.md`](architecture.md) (structure), [`auth.md`](auth.md) (route protection), [`coding-standards.md`](coding-standards.md) (exports and naming).
 
 Terms and file conventions here were checked against the bundled docs for the installed Next.js 16.4.3 (`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/`).
 
 ## 1. What exists today
 
 ```
-src/app/
-  layout.tsx     # root layout: <html>/<body>, Geist fonts, globals.css
-  page.tsx       # "/": default create-next-app starter page
-  globals.css
-  favicon.ico
+src/
+  proxy.ts                      # optimistic auth redirects (auth.md §4)
+  app/
+    layout.tsx                  # root layout: <html>/<body>, fonts, globals.css
+    page.tsx                    # /  landing page
+    (auth)/
+      layout.tsx                # Welcome-style form column, no auth check
+      actions.ts                # signUp, logIn, logOut Server Actions
+      login/page.tsx            # /login
+      signup/page.tsx           # /signup
+    (dashboard)/
+      layout.tsx                # dashboard shell: SiteNav + user menu (display only)
+      dashboard/page.tsx        # /dashboard, calls requireUser()
+    api/auth/[...nextauth]/
+      route.ts                  # Auth.js route handler (GET, POST)
 ```
 
-- One route: `/`, still the starter page (not the landing page yet).
-- No route groups, dynamic segments, `loading.tsx`, `error.tsx`, `not-found.tsx`, `proxy.ts`, Route Handlers or Server Actions.
-- `next.config.ts` enables `cacheComponents` and `partialPrefetching`, which affect how loading states and layouts behave (§5).
+- No dynamic segments, `loading.tsx`, `error.tsx` or `not-found.tsx` yet.
+- `next.config.ts` enables `cacheComponents` and `partialPrefetching`, which affect how loading states and layouts behave (§5). `/` and `/dashboard` build as partial prerenders: a static shell, with the signed-in parts streamed behind `<Suspense>`.
 
-## 2. Planned route map
+## 2. Route map
 
 ```
 src/app/
-  layout.tsx                    # root layout (exists)
-  page.tsx                      # /  landing page (exists as starter; to be replaced)
   user/
     [handle]/
-      page.tsx                  # /user/[handle]  public profile
-  (auth)/
-    layout.tsx                  # optional shared auth-page layout
-    …                           # sign-in (and other auth pages): paths TBD
+      page.tsx                  # /user/[handle]  public profile (planned)
   (dashboard)/
-    layout.tsx                  # dashboard shell (nav etc.)
-    …                           # dashboard + add-links pages: paths TBD
-  api/
-    …                           # Route Handlers: webhooks and third-party callbacks only
+    dashboard/
+      …                         # add-links and other dashboard pages go here (planned)
 ```
 
 | Route | Access | Status |
 | --- | --- | --- |
-| `/` landing page | Public | File exists (starter content) |
+| `/` landing page | Public | Exists |
+| `/login`, `/signup` in `(auth)` | Public. Signed-in visitors are sent to `/dashboard` by Proxy | Exists |
+| `/dashboard` in `(dashboard)` | Signed-in only | Exists (placeholder content) |
+| Add-links page under `/dashboard/…` | Signed-in only | Planned. Exact path TBD |
+| `src/app/api/auth/[...nextauth]` | Auth.js endpoints | Exists |
 | `/user/[handle]` public profile | Public | Planned |
-| Auth pages in `(auth)` (sign-in, …) | Public | Planned. URLs TBD |
-| Dashboard page in `(dashboard)` | Signed-in only | Planned. URL TBD |
-| Add-links page in `(dashboard)` | Signed-in only | Planned. URL TBD |
-| `src/app/api/…` Route Handlers | Depends on handler | Planned. None decided |
+| Other `src/app/api/…` Route Handlers | Depends on handler | Planned. None decided |
 
 ## 3. Route groups
 
@@ -58,14 +61,14 @@ Consequences for Linkbase:
 - Proxy matches **URLs, not folders**, so a shared URL prefix for dashboard pages makes protection simpler ([`auth.md`](auth.md) §3).
 - The same applies to `(auth)`: its pages need distinct URLs that don't collide with other routes.
 
-**TBD:** dashboard URL prefix, dashboard and add-links paths, auth page paths (sign-in, sign-out, others).
+**Decided:** dashboard pages live under `(dashboard)/dashboard/`, giving the protected `/dashboard` prefix. Auth pages are `/login` and `/signup`; sign-out is the `logOut` action. **TBD:** the add-links path.
 
 Keep one top-level root layout (`src/app/layout.tsx`). Giving each group its own root layout would force full page reloads when moving between groups. There is no plan for that.
 
 ## 4. Public routes
 
 ### `/` landing page
-- `src/app/page.tsx`. Replace the starter content when the landing page is built. Contents TBD.
+- `src/app/page.tsx`: the landing page.
 - Stays outside both route groups.
 
 ### `/user/[handle]` public profile
@@ -82,13 +85,13 @@ Keep one top-level root layout (`src/app/layout.tsx`). Giving each group its own
 - **Don't rely on `(dashboard)/layout.tsx` for the auth check.** Layouts don't re-run on client-side navigation and don't stop child pages from rendering. The layout may *display* user info.
 - With Cache Components on, a layout that reads the session (runtime data) must wrap that read in its own `<Suspense>`, or the build errors. Prefer reading the session in pages.
 
-> **Next.js 16:** Middleware is now **Proxy** (`src/proxy.ts`). `middleware.ts` is deprecated. Whether to add it is TBD ([`auth.md`](auth.md) §4).
+> **Next.js 16:** Middleware is now **Proxy**. `src/proxy.ts` exists: it redirects signed-out visitors from `/dashboard/*` to `/login?callbackUrl=…` ([`auth.md`](auth.md) §4).
 
 ## 6. Auth pages: `(auth)`
 
 - Holds sign-in and any other auth pages. These are public.
-- Signed-in users visiting them: redirect to the dashboard or show the page? **TBD.**
-- Which pages exist depends on the Auth.js providers and setup, which are **TBD** ([`auth.md`](auth.md) §2). Don't add pages for a provider that isn't decided.
+- `/login` and `/signup` exist. Signed-in users visiting them are redirected to `/dashboard` (Proxy).
+- Only the credentials provider exists ([`auth.md`](auth.md) §2). Don't add pages for a provider that isn't decided (password reset, email verification and OAuth are not built).
 
 ## 7. `layout.tsx`, `loading.tsx`, `error.tsx`
 
@@ -111,24 +114,25 @@ These route files use **default exports** (required by Next.js). That's the one 
 | Use | Mechanism | Location |
 | --- | --- | --- |
 | Webhooks, third-party callbacks (e.g. OAuth callbacks) | **Route Handler** (`route.ts`) | Under `src/app/api/…` only |
-| App mutations from Linkbase's own UI (create/update/delete links, profile edits) | **Server Action** (`"use server"`) | Location TBD ([`architecture.md`](architecture.md) §4) |
+| App mutations from Linkbase's own UI (create/update/delete links, profile edits) | **Server Action** (`"use server"`) | Auth actions: `src/app/(auth)/actions.ts`. Others TBD ([`architecture.md`](architecture.md) §4) |
 | Reading data for pages | Server Components | Not an API route |
 
 - Route Handlers export named HTTP-method functions (`GET`, `POST`, …), not a default export.
 - Don't add `api/` routes for the app's own UI. Use Server Actions.
 - Every Server Action checks auth and ownership ([`auth.md`](auth.md) §5). Route Handlers that touch user data respond `401` without a session. Webhook handlers verify the sender (method TBD per service).
-- The Auth.js route handler (if the chosen version needs one) counts as a third-party callback and belongs under `src/app/api/`. Its exact path is **TBD** ([`auth.md`](auth.md) §2).
+- The Auth.js route handler counts as a third-party callback: `src/app/api/auth/[...nextauth]/route.ts`.
 - **TBD:** which webhooks or third-party services exist (none decided).
 
 ## 9. Open decisions
 
 | Decision | Status |
 | --- | --- |
-| Dashboard URL prefix, dashboard and add-links paths | TBD |
-| Auth page paths, and behaviour for signed-in visitors | TBD |
-| Whether to add `src/proxy.ts`, and its matcher | TBD |
+| Dashboard URL prefix and dashboard path | Decided: `/dashboard` |
+| Add-links path | TBD |
+| Auth page paths, and behaviour for signed-in visitors | Decided: `/login`, `/signup`; signed-in → `/dashboard` |
+| `src/proxy.ts` and its matcher | Decided: `/dashboard/:path*`, `/login`, `/signup` |
 | `/user/[handle]` prerendering, caching, handle validation | TBD |
 | Which segments get `loading.tsx` / `error.tsx`. `global-error.tsx`, `not-found.tsx` | TBD |
-| Auth.js route handler path | TBD |
+| Auth.js route handler path | Decided: `src/app/api/auth/[...nextauth]/route.ts` |
 | Webhooks / third-party callbacks | TBD |
-| Server Action file location | TBD |
+| Server Action file location | TBD in general (auth: `src/app/(auth)/actions.ts`) |

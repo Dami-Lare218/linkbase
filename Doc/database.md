@@ -2,15 +2,15 @@
 
 How Linkbase will store data with **MongoDB + Mongoose**. Read this before adding a model, a query or a Server Action that reads or writes data.
 
-> **Status: connection set up, no models yet.** The Mongoose connection helper exists (§1, §4). Collections, schemas and indexes are still the intended design. Undecided details are marked **TBD**. Do not fill them in without an explicit decision.
+> **Status: connection and first models exist.** The connection helper (§4) and the `User` and `AuthAttempt` models (§5.1) are implemented. Other collections are still the intended design. Undecided details are marked **TBD**. Do not fill them in without an explicit decision.
 
 ## 1. What exists today
 
 - `mongoose` ^9 and `server-only` are dependencies.
 - `src/lib/db/connect.ts` exports `connectToDatabase()` (§4). It imports `server-only`, so importing it into a Client Component fails the build.
 - `MONGODB_URI` holds the development connection string (MongoDB Atlas). It lives in the Git-ignored `.env.local`. `.env.example` (committed) lists it with a placeholder.
-- No models and no `src/lib/db/models/` folder yet. It is created with the first collection.
-- No authentication yet, so there is no user ID to scope queries by.
+- Models in `src/lib/db/models/`: `user.ts` (`User`) and `auth-attempt.ts` (`AuthAttempt`, sign-in rate limiting). Both import `server-only`.
+- Authentication exists ([`auth.md`](auth.md)). The signed-in user's ID is `session.user.id`, a string of the user's `_id`.
 - `mongoose` and `mongodb` are on Next.js's automatic `serverExternalPackages` list, so `next.config.ts` needs no change.
 
 ## 2. Stack
@@ -68,10 +68,26 @@ export const Example = mongoose.models.Example ?? mongoose.model("Example", exam
 - **Strict schemas.** Keep Mongoose's `strict: true` (the default) so unknown fields are dropped and never saved. Set `strictQuery: true` explicitly so unknown fields in query filters are dropped too.
 - **Timestamps.** Every schema uses `{ timestamps: true }` to get `createdAt` and `updatedAt`.
 - **Validation in the schema.** Required fields, types, lengths, enums and formats are declared on the schema so every write path enforces them.
-- Validate input again at the Server Action boundary before it reaches Mongoose. Planned: Zod, not yet installed (see [`errors-and-validation.md`](errors-and-validation.md) §3).
-- Shared TypeScript types for documents go in the types folder under `src/lib/` (name TBD in [`architecture.md`](architecture.md)).
+- Validate input again at the Server Action boundary before it reaches Mongoose, with Zod schemas in `src/lib/validation/` (see [`errors-and-validation.md`](errors-and-validation.md) §3).
+- Shared TypeScript types go in `src/lib/types/`. Models export their own document type (`InferSchemaType`).
 
-**TBD:** the collections and their fields. None are decided.
+### 5.1 Existing collections
+
+**`users`** (`User`, `src/lib/db/models/user.ts`):
+
+| Field | Rules |
+| --- | --- |
+| `name` | String, required, trimmed, 1–50 chars |
+| `email` | String, required, trimmed, lowercased, max 254, basic format check. **Unique index** |
+| `passwordHash` | String (bcrypt), required, **`select: false`**: only returned when a query asks for `+passwordHash` |
+| `handle` | String, optional (picked later during onboarding), trimmed, lowercased, `^[a-z0-9._]{3,30}$`. **Unique partial index**: unique only among users who have one |
+| `createdAt` / `updatedAt` | `timestamps: true` |
+
+Never send a `User` document to the client. Map it to the fields needed (e.g. `{ id, name, email }`).
+
+**`authattempts`** (`AuthAttempt`, `src/lib/db/models/auth-attempt.ts`): rate-limit counters `{ key, count, expiresAt }`. `key` is `<limit-name>:<sha256>` so no raw emails or IPs are stored. Unique index on `key`, TTL index on `expiresAt` (MongoDB deletes expired windows).
+
+**TBD:** further collections (links, …) and their fields.
 
 ## 6. Indexes
 
@@ -79,7 +95,9 @@ export const Example = mongoose.models.Example ?? mongoose.model("Example", exam
 - **`handle`:** index it on any collection that has a handle field, since handles are used for lookups.
 - Declare indexes in the schema (`schema.index(...)`) so they live with the model.
 
-**TBD:** which collections have `userId` or `handle`; whether `handle` is unique, and if so globally or per user; whether `autoIndex` stays on in production or indexes are created another way.
+**Decided:** `handle` lives on `users` and is globally unique (partial index, since it's optional).
+
+**TBD:** which other collections have `userId`; whether `autoIndex` stays on in production or indexes are created another way.
 
 ## 7. User data ownership
 
@@ -91,7 +109,9 @@ Users can only read and change their own data. Rules:
 4. Check authentication at the top of every Server Action, because Server Actions can be called by direct POST requests (see [`architecture.md`](architecture.md) §6).
 5. When a document isn't found under the user's ID, treat it as "not found". Do not reveal that it belongs to someone else.
 
-**TBD:** the auth provider and how the session exposes the user ID, the type of `userId` (ObjectId or string), and whether any data is public, such as content looked up by `handle`.
+**Decided:** the session exposes the user ID as the string `session.user.id` ([`auth.md`](auth.md) §2).
+
+**TBD:** how `userId` is stored on user-owned collections (ObjectId with `ref: "User"` is the natural fit; Mongoose casts the session string in filters), and which data is public, such as content looked up by `handle`.
 
 ## 8. Caching
 
@@ -109,11 +129,11 @@ Users can only read and change their own data. Rules:
 | Connection options | Decided: `serverSelectionTimeoutMS: 5000`, `bufferCommands: false`, `strictQuery: true`. Production tuning TBD |
 | Missing `MONGODB_URI` | Decided: fail on first use, not at startup or build |
 | Helper file and function names | Decided: `src/lib/db/connect.ts`, `connectToDatabase()` |
-| Collections, schemas and fields | TBD |
-| `handle` uniqueness and scope | TBD |
+| Collections, schemas and fields | `users`, `authattempts` decided (§5.1). Others TBD |
+| `handle` uniqueness and scope | Decided: optional, globally unique on `users` |
 | Production index creation | TBD |
-| Auth provider and session → `userId` | TBD |
-| `userId` type | TBD |
+| Auth provider and session → `userId` | Decided: Auth.js credentials, `session.user.id` (string) |
+| `userId` storage type on owned collections | TBD |
 | Public (non-owner) data access | TBD |
-| Input validation library | Planned: Zod, not installed. See [`errors-and-validation.md`](errors-and-validation.md) |
+| Input validation library | Decided: Zod 4 at the Server Action boundary. See [`errors-and-validation.md`](errors-and-validation.md) |
 | Caching strategy for DB reads | TBD |

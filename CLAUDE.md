@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-Linkbase is a fresh `create-next-app` scaffold (single commit). There is no app logic, data layer, or test setup yet — `src/app/page.tsx` is still the default starter page.
+Linkbase has a landing page (`/`), a MongoDB connection with `User` and `AuthAttempt` models, and email + password authentication (NextAuth v5): `/login`, `/signup`, a protected placeholder `/dashboard`, and a user menu in the header. Links and public profiles are not built yet. Vitest unit tests cover the auth validation schemas; end-to-end QA is still manual.
 
 ## Commands
 
@@ -14,8 +14,7 @@ Linkbase is a fresh `create-next-app` scaffold (single commit). There is no app 
 - `npm run build` — production build (also the main type-check, since there is no separate `tsc` script)
 - `npm run start` — serve the production build
 - `npm run lint` — ESLint 9 flat config (`eslint.config.mjs`, extends `eslint-config-next` core-web-vitals + typescript)
-
-No test runner is configured.
+- `npm run test` — Vitest unit tests (`vitest run`, single run). Config in `vitest.config.mts`; tests are `src/**/*.test.ts` beside the file they test. Unit tests only: no database access.
 
 ## Stack and conventions
 
@@ -25,7 +24,8 @@ No test runner is configured.
 - Route props use the generated global types (e.g. `LayoutProps<"/">` in `layout.tsx`, likewise `PageProps<...>`), not hand-written prop interfaces.
 - **Tailwind CSS v4**, CSS-first config: no `tailwind.config.js`. Theme tokens live in `src/app/globals.css` via `@theme inline`; CSS is processed through the `@tailwindcss/turbopack` loader configured in `next.config.ts` (not PostCSS). Light/dark colors are CSS variables (`--background`, `--foreground`) switched by `prefers-color-scheme`. The design docs in `Doc/` contain legacy Tailwind v3 config examples; never add a `tailwind.config.js`. See the v4 compatibility note in `Doc/design-system.md` §0.
 - Fonts: Geist / Geist Mono via `next/font/google`, exposed as `--font-geist-sans` / `--font-geist-mono`.
-- **Database (planned, not implemented):** MongoDB + Mongoose, with the connection helper in `src/lib/db/` and models in `src/lib/db/models/`. No database package, code or env config exists yet. See `Doc/database.md` for the connection, schema, index and user-ownership rules before writing any data code.
+- **Database:** MongoDB + Mongoose 9. Connection helper `connectToDatabase()` in `src/lib/db/connect.ts`, models in `src/lib/db/models/`, `MONGODB_URI` in `.env.local`. See `Doc/database.md` for the connection, schema, index and user-ownership rules before writing any data code.
+- **Auth:** NextAuth (Auth.js) `5.0.0-beta.32`, credentials provider, JWT sessions, `AUTH_SECRET` in `.env.local`. Helpers in `src/lib/auth/` (`getCurrentUser()`, `requireUser()`), Proxy in `src/proxy.ts`. Validation with Zod 4 in `src/lib/validation/`. See `Doc/auth.md` before adding a protected page or Server Action.
 
 ## Live Docs (Context7)
 
@@ -41,6 +41,8 @@ Project skills live in `.claude/skills/`. Use them at these moments:
 
 - **`plan-feature`**: before building any new feature (plans, scopes, gets approval).
 - **`create-feature`**: only after a plan has been explicitly approved.
+- **`write-tests`**: when asked to write or add tests for a feature. Writes Vitest unit tests per `Doc/testing.md`; doesn't run them, run QA or commit. Vitest is installed; run the tests with `npm run test`.
+- **`run-qa-suite`**: **not created yet.** `Doc/testing.md` plans it for Playwright MCP-driven QA. Until it exists, QA is manual.
 - **`vercel-react-best-practices`**: whenever writing, reviewing or refactoring React components, Next.js pages/layouts, Server Components, Server Actions or data fetching, and for any performance or bundle-size work. Read its `SKILL.md`, then only the `rules/*.md` files relevant to the task (not the full `AGENTS.md`). Prioritise the CRITICAL/HIGH rules (`async-*`, `bundle-*`, `server-*`).
   - **Precedence:** bundled Next.js docs → `Doc/` files → this skill. If the skill suggests a pattern the project doesn't use (e.g. SWR, LRU caches, older caching APIs), follow `Doc/data-fetching.md` and the `"use cache"` model instead, and point out the difference.
   - **Sync:** the skill was installed with `npx skills` into `.agents/skills/` (tracked in `skills-lock.json`) and mirrored to `.claude/skills/vercel-react-best-practices/`, which is the copy Claude Code loads. After updating the skill, re-copy the folder.
@@ -63,4 +65,4 @@ Project documentation lives in `Doc/`. Whenever a new file is added to `Doc/`, a
 - [`Doc/data-mutations.md`](Doc/data-mutations.md) — Planned write path: all writes via Server Actions in a fixed order (authenticate → Zod validate → `userId` ownership → write → revalidate → typed result), expected vs unexpected failures, revalidation choices and a new-action checklist. Read before writing or changing any Server Action or code that creates, updates or deletes data.
 - [`Doc/security.md`](Doc/security.md) — Verified current protections vs planned conventions: env vars and `.env.example` (note `.gitignore`'s `.env*` also ignores it), security headers via `next.config.ts` and the CSP strategy trade-off with Cache Components, rate limiting (TBD), untrusted content and URL validation, `noopener noreferrer`, server-side auth checks, and safe logs/responses. Read before handling secrets, changing headers, rendering user content or links, or adding sign-in or link-creation flows.
 - [`Doc/git-conventions.md`](Doc/git-conventions.md) — Branch naming (`<type>/<feature>`), Conventional Commits (`feat`/`fix`/`docs`/`refactor`/`test`/`chore`), PR-only changes to `main`, human review required (Claude Code never approves or merges its own work), what never gets committed, and which GitHub settings are still unverified. Read before creating a branch, committing, opening a PR or merging.
-- [`Doc/testing.md`](Doc/testing.md) — Planned testing: Vitest unit tests (`*.test.ts` beside the file) for pure functions and Zod schemas, Playwright MCP QA via the `run-qa-suite` skill (no `e2e/`, no `playwright.config.ts`, no committed `.spec.ts`), isolated test database via `MONGODB_URI_TEST` in `.env.test` with fail-safe checks, and test independence. Vitest and the skill don't exist yet. Read before writing a test, running QA or changing test env config.
+- [`Doc/testing.md`](Doc/testing.md) — Testing: Vitest unit tests (`*.test.ts` beside the file) for pure functions and Zod schemas, Playwright MCP QA via the `run-qa-suite` skill (no `e2e/`, no `playwright.config.ts`, no committed `.spec.ts`), isolated test database via `MONGODB_URI_TEST` in `.env.test` with fail-safe checks, and test independence. Vitest 4.1.12 is set up (`vitest.config.mts`, `npm run test`) with passing auth validation tests, and the `write-tests` skill and `linkbase_test` database exist. The `run-qa-suite` skill and the `MONGODB_URI_TEST` wiring don't exist yet (interim: `.env.development.local` override). Read before writing a test, running QA or changing test env config.

@@ -1,9 +1,17 @@
+import Link from "next/link";
+
 import { Wordmark } from "@/components/ui/wordmark";
 
 import { ClaimForm } from "./claim-form";
 
-// Placeholder targets until these pages exist.
-const footerLinks = ["Log in", "Sign up", "Help", "Privacy", "Terms"];
+// "#" targets are placeholders until those pages exist.
+const footerLinks = [
+  { label: "Log in", href: "/login" },
+  { label: "Sign up", href: "/signup" },
+  { label: "Help", href: "#" },
+  { label: "Privacy", href: "#" },
+  { label: "Terms", href: "#" },
+];
 
 /** Closing call to action, with the footer card inset at the bottom (as in the design). */
 export function FinalCta() {
@@ -36,14 +44,14 @@ export function FinalCta() {
               </p>
             </div>
             <nav aria-label="Footer" className="-mt-2.5 flex flex-wrap gap-x-6">
-              {footerLinks.map((label) => (
-                <a
-                  key={label}
-                  href="#"
+              {footerLinks.map((link) => (
+                <Link
+                  key={link.label}
+                  href={link.href}
                   className="inline-flex min-h-11 items-center rounded-sm text-[15px] font-medium text-fg-primary no-underline hover:text-fg-brand"
                 >
-                  {label}
-                </a>
+                  {link.label}
+                </Link>
               ))}
             </nav>
           </div>

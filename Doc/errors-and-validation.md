@@ -2,15 +2,17 @@
 
 How Linkbase validates input and handles errors. Read this before writing a Server Action, a form, an `error.tsx` boundary or any code that logs or reports errors.
 
-> **Status: planned, not implemented.** No validation, Server Actions, forms, database access, error boundaries or logging exist yet. Section 1 describes the current state. Everything after it is a planned convention. Undecided details are marked **TBD**. Related: [`coding-standards.md`](coding-standards.md) §7–8 (async, `Error` objects), [`routing.md`](routing.md) §7 (`error.tsx`), [`auth.md`](auth.md) §5–6 (Server Action pattern), [`database.md`](database.md) §5 (schema validation).
+> **Status: partly implemented.** Zod validation, the shared result type and the auth forms exist. Error boundaries and a logging setup don't. Section 1 describes the current state. Everything after it is the convention to follow. Undecided details are marked **TBD**. Related: [`coding-standards.md`](coding-standards.md) §7–8 (async, `Error` objects), [`routing.md`](routing.md) §7 (`error.tsx`), [`auth.md`](auth.md) §5–6 (Server Action pattern), [`database.md`](database.md) §5 (schema validation).
 
 Checked against the bundled Next.js 16.4.3 docs: `01-getting-started/10-error-handling.md`, `02-guides/forms.md`, `03-api-reference/03-file-conventions/error.md`.
 
 ## 1. What exists today
 
-- **Zod is not a project dependency.** It isn't in `package.json`. A copy exists in `node_modules` only because `eslint-plugin-react-hooks` depends on it. **Don't import it** until it's added as a direct dependency.
-- No `src/lib/` folder, so no `src/lib/validation/`.
-- No Server Actions, forms, `error.tsx`, `global-error.tsx` or logging setup.
+- **Zod 4** (`zod` ^4) is a direct dependency.
+- `src/lib/validation/auth.ts`: `signUpSchema`, `logInSchema` and their `z.infer` types.
+- `src/lib/types/action-result.ts`: `FormState`, the shared Server Action result (§4).
+- Server Actions `signUp`, `logIn`, `logOut` in `src/app/(auth)/actions.ts`, with client forms in `src/components/auth/`.
+- **Not present yet:** `error.tsx`, `global-error.tsx` and a logging setup. Unexpected errors currently fall back to Next.js's default error page.
 
 ## 2. Two kinds of errors
 
@@ -40,9 +42,9 @@ Order inside a Server Action (extends [`auth.md`](auth.md) §5):
 
 - Shared Zod schemas live in `src/lib/validation/` (imported as `@/lib/validation/...`), following the `@/*` → `src/*` alias in [`architecture.md`](architecture.md) §4.
 - Derive TypeScript input types from the schemas (`z.infer`) instead of writing them twice.
-- **TBD:** file layout inside `validation/` (per feature, per model, …), schema names, and which schemas exist. None are defined yet.
-
-**TBD:** Zod version (add as a direct dependency when needed).
+- **Decided:** one file per feature (`validation/auth.ts`), schemas named `<action>Schema` (`signUpSchema`).
+- Zod 4 API: customise messages with `{ error: "…" }`, use top-level formats such as `z.email()`, and map issues to fields with `z.flattenError(error).fieldErrors`.
+- Normalise inside the schema (`.trim()`, `.toLowerCase()` on emails) so the action writes the cleaned value. Never trim passwords.
 
 ## 4. Returning validation errors to forms
 
@@ -52,11 +54,20 @@ Order inside a Server Action (extends [`auth.md`](auth.md) §5):
 - The result must be **serializable** (plain objects, strings, numbers), since it crosses from server to client.
 - The type lives in shared code so every action and form uses the same shape.
 
-**TBD:**
-- The exact result shape: success vs failure fields, form-level (non-field) messages, whether submitted values are echoed back.
-- Where the result type lives under `src/lib/`.
-- How Zod issues map to field messages (e.g. Zod's flatten/tree helpers vs custom mapping).
-- How form-level errors display ([`ui.md`](ui.md) form field states).
+**Decided:** `FormState<TField>` in `src/lib/types/action-result.ts`:
+
+```ts
+type FormState<TField extends string = string> = {
+  ok: boolean;
+  message?: string;                                   // form-level message
+  fieldErrors?: Partial<Record<TField, string[]>>;    // from z.flattenError(...).fieldErrors
+  values?: Partial<Record<TField, string>>;           // echoed back, never passwords
+};
+```
+
+- Echo submitted values back: React 19 resets a form after its action runs, and inputs use `defaultValue={state.values?.x}` to keep what the user typed.
+- Field errors show under each `Input` (`error` prop: red ring, icon, `aria-invalid`, `aria-describedby`).
+- Form-level messages show above the fields in `FormMessage` (`role="alert"` for errors, `role="status"` for info).
 
 ## 5. Unexpected errors
 
@@ -100,12 +111,12 @@ Expected validation failures are normal. Don't log them as errors.
 
 | Decision | Status |
 | --- | --- |
-| Add Zod as a direct dependency, and its version | TBD |
-| `src/lib/validation/` file layout and schema names | TBD |
-| Result object shape and where its type lives | TBD |
-| Mapping Zod issues to field messages | TBD |
-| Form-level error display | TBD |
-| Error shape when a Server Action has no session | TBD (see [`auth.md`](auth.md) §6) |
+| Add Zod as a direct dependency, and its version | Decided: `zod` ^4 |
+| `src/lib/validation/` file layout and schema names | Decided (§3) |
+| Result object shape and where its type lives | Decided: `FormState` (§4) |
+| Mapping Zod issues to field messages | Decided: `z.flattenError` |
+| Form-level error display | Decided: `FormMessage` above the fields |
+| Error shape when a Server Action has no session | Decided: `{ ok: false, message }` (see [`auth.md`](auth.md) §6) |
 | Segments with `error.tsx`, `global-error.tsx`, error UI | TBD (see [`routing.md`](routing.md)) |
 | Showing `error.digest` to users | TBD |
 | Logging service, levels, format, alerting | TBD |
