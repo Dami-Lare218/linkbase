@@ -17,6 +17,8 @@ type SignUpField = "name" | "email" | "password";
 type LogInField = "email" | "password";
 
 const DEFAULT_REDIRECT = "/dashboard";
+// New accounts have no handle yet, so they pick one first.
+const SIGN_UP_REDIRECT = "/onboarding";
 
 function readString(formData: FormData, field: string): string {
   const value = formData.get(field);
@@ -72,7 +74,7 @@ export async function signUp(_prev: FormState<SignUpField>, formData: FormData):
 
   try {
     // On success this throws Next.js's redirect, which is re-thrown below.
-    await signIn("credentials", { email, password, redirectTo: DEFAULT_REDIRECT });
+    await signIn("credentials", { email, password, redirectTo: SIGN_UP_REDIRECT });
   } catch (err) {
     if (err instanceof AuthError && err.type === CredentialsSignin.type) {
       // The account exists, but automatic sign-in was refused (e.g. rate limited).

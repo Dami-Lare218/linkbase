@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { LoginForm } from "@/components/auth/login-form";
+import { RedirectIfSignedIn } from "@/components/auth/redirect-if-signed-in";
 
 export const metadata: Metadata = {
   title: "Log in · Linkbase",
@@ -16,6 +17,7 @@ export default function LoginPage() {
         <p className="m-0 text-body-lg text-fg-secondary">Log in to manage your Linkbase.</p>
       </div>
       <LoginForm />
+      <RedirectIfSignedIn />
     </>
   );
 }

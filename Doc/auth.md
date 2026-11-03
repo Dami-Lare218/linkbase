@@ -10,17 +10,18 @@ How Linkbase will sign users in and make sure each user can only reach their own
 | --- | --- |
 | Auth.js setup (Credentials provider), exports `handlers`, `auth`, `signIn`, `signOut` | `src/lib/auth/auth.ts` |
 | Database-free settings: pages, session, callbacks, logger. Used alone by Proxy | `src/lib/auth/config.ts` |
-| `getCurrentUser()` (React `cache()`), `requireUser()` | `src/lib/auth/session.ts` |
+| `getCurrentUser()` (React `cache()`, loads the user from the database), `requireUser()`, `requireOnboardedUser()` | `src/lib/auth/session.ts` |
 | bcrypt hashing and timing-safe check | `src/lib/auth/password.ts` |
 | MongoDB-backed rate limiter | `src/lib/auth/rate-limit.ts` |
 | Proxy (optimistic redirects) | `src/proxy.ts` |
 | Auth.js route handler | `src/app/api/auth/[...nextauth]/route.ts` |
 | Server Actions `signUp`, `logIn`, `logOut` | `src/app/(auth)/actions.ts` |
-| Pages | `/login`, `/signup` in `(auth)`; `/dashboard` in `(dashboard)` |
+| Handle onboarding: `checkHandleAvailability`, `claimHandleAction` | `src/app/onboarding/actions.ts`, data layer `src/lib/users/handle.ts` |
+| Pages | `/login`, `/signup` in `(auth)`; `/onboarding`; `/dashboard` in `(dashboard)` |
 | Header UI | `src/components/auth/header-auth.tsx`, `user-menu.tsx` |
 | Session type (`session.user.id`) | `src/lib/types/next-auth.d.ts` |
 
-Not built yet: email verification, password reset, account deletion, handle onboarding, OAuth providers.
+Not built yet: email verification, password reset, account deletion, changing a handle, OAuth providers.
 
 ## 2. Stack (decided)
 
@@ -36,19 +37,33 @@ Not built yet: email verification, password reset, account deletion, handle onbo
 | How the session exposes `userId` | `session.user.id`: the user's MongoDB `_id` as a string, copied into the JWT at sign-in |
 | Auth helper folder | `src/lib/auth/` |
 
-Because sessions are JWTs, a session isn't checked against the database on each request. A deleted user stays signed in until the cookie expires. This was observed in QA on 2026-11-03 and is recorded as a known limitation, not fixed: see [`security.md`](security.md) §7.1.
+Because sessions are JWTs, the cookie itself stays valid until it expires, even after its user is deleted. Since onboarding, `getCurrentUser()` loads the user from the database on every request, so pages and Server Actions treat a deleted user as signed out; Proxy (cookie only) does not. See [`security.md`](security.md) §7.1.
 
 ## 3. Routes
 
 | File location | URL | Access |
 | --- | --- | --- |
 | `src/app/(dashboard)/dashboard/…` | `/dashboard` and below | **Signed-in users only** |
-| `src/app/(auth)/login`, `(auth)/signup` | `/login`, `/signup` | Public. Signed-in visitors are redirected to `/dashboard` by Proxy |
+| `src/app/(auth)/login`, `(auth)/signup` | `/login`, `/signup` | Public. Signed-in visitors are redirected by the page (`RedirectIfSignedIn`, database-backed), not by Proxy: straight to `/dashboard`, or `/onboarding` if they have no handle |
 | `src/app/user/[handle]/page.tsx` (planned) | `/user/[handle]` | **Public.** No sign-in needed |
 | `src/app/page.tsx` | `/` | Public landing page |
 
 - **Route groups don't add a URL segment.** `src/app/(dashboard)/links/page.tsx` would serve `/links`, not `/dashboard/links`. Put every dashboard page under the real `dashboard/` folder inside the group so it gets the protected **`/dashboard` prefix** that Proxy matches.
-- Every dashboard page still calls `requireUser()` itself (§4). A new public route must be added on purpose.
+- Every dashboard page still calls `requireOnboardedUser()` itself (§4). A new public route must be added on purpose.
+
+### 3.1 Onboarding: picking a handle
+
+Every account must pick a handle before using the app. The handle is stored on the `User` record ([`database.md`](database.md) §5.1) and identifies the public profile `/user/[handle]`.
+
+| Who | Visits | Result |
+| --- | --- | --- |
+| Just signed up | — | `signUp` signs them in and redirects to `/onboarding` |
+| Signed in, no handle | `/dashboard` (or any page using `requireOnboardedUser()`), or logs in | Redirected to `/onboarding` |
+| Signed in, has a handle | `/onboarding` | Redirected to `/dashboard` |
+| Signed out | `/onboarding` | Proxy redirects to `/login?callbackUrl=/onboarding` |
+
+- Claiming a handle redirects to `/dashboard`. A handle is set once; changing it isn't built.
+- The handle check is server-side only (database), never in Proxy: a handle claim in the JWT could go stale and loop between Proxy and the page.
 
 ## 4. How the layers work together
 
@@ -75,16 +90,19 @@ Request
 - It redirects signed-out visitors away from dashboard URLs early, for a better experience.
 - Keep it fast. **Don't query the database in Proxy.** Check only for a session.
 - It is **not a security boundary.** Matchers can miss routes, and Server Actions are POST requests to the page they're used on. Layers 2 and 3 still apply.
-- **Implemented:** `src/proxy.ts` builds Auth.js from `authConfig` alone (no Mongoose) and exports its `auth` as `proxy`. The `authorized` callback in `config.ts` decides: no session on `/dashboard/*` → `/login?callbackUrl=<path>`; session on `/login` or `/signup` → `/dashboard`. Matcher: `/dashboard/:path*`, `/login`, `/signup`.
+- **Implemented:** `src/proxy.ts` builds Auth.js from `authConfig` alone (no Mongoose) and exports its `auth` as `proxy`. The `authorized` callback in `config.ts` decides: no session on `/dashboard/*` or `/onboarding` → `/login?callbackUrl=<path>`; Matcher: `/dashboard/:path*`, `/onboarding/:path*`. It never checks the handle.
+- **Not in Proxy (on purpose):** "signed in on `/login` or `/signup` → `/dashboard`". Proxy only sees the cookie, so a deleted user's still-valid cookie looped forever between `/login` (Proxy: signed in) and `/dashboard` (page: no such user); found in onboarding QA on 2026-11-03. Those pages render `RedirectIfSignedIn` (`src/components/auth/redirect-if-signed-in.tsx`), which uses `getCurrentUser()` instead. It redirects with `homePathFor(user)` (`src/lib/auth/home-path.ts`), so a signed-in user without a handle goes to `/onboarding` in one hop.
 
 ### Layer 2: Auth helper in server code (required)
 
 `src/lib/auth/session.ts` provides:
 
-- `getCurrentUser()`: reads the Auth.js session and returns `{ id, name, email }` or `null`. Wrapped in React's `cache()`, so a request reads the session only once.
-- `requireUser()`: the same user, or `redirect("/login")` when there is no valid session.
+- `getSessionUserId()`: the user id from the session cookie only, or `null`. **No database lookup**, so it doesn't notice deleted users. Use it only for cheap, read-only work on public data (today: the rate-limit key of the handle availability check).
+- `getCurrentUser()`: `getSessionUserId()`, then loads `name`, `email` and `handle` from the database by `session.user.id`. Returns `{ id, name, email, handle }` (`handle` is `null` before onboarding), or `null` without a session, with an invalid id, or when the user no longer exists. Wrapped in React's `cache()`, so a request does this only once. It costs one indexed `_id` read per request. It starts with `await connection()`, so Cache Components stops prerendering before Auth.js or the database driver run (they use crypto randomness, which is rejected during prerender).
+- `requireUser()`: the same user (onboarded or not), or `redirect("/login")` when there is no valid session. Use it only on `/onboarding`.
+- `requireOnboardedUser()`: `requireUser()`, then `redirect("/onboarding")` when there's no handle. **Use it on every other protected page.**
 
-Use `requireUser()` in pages. In Server Actions, call `getCurrentUser()` and return an error result when it's `null` (a redirect from an action is fine too, but must sit outside `try`).
+Use `requireOnboardedUser()` in pages (`requireUser()` on `/onboarding` only). In Server Actions, call `getCurrentUser()` and return an error result when it's `null` (a redirect from an action is fine too, but must sit outside `try`).
 
 Call it in:
 - **Every dashboard page** (or the data functions those pages use).
@@ -132,7 +150,7 @@ Rules:
 | Where | No valid session → |
 | --- | --- |
 | Proxy, on a dashboard URL | Redirect to `/login?callbackUrl=<path>`. After login the user returns there. `logIn` only accepts same-site paths (`/…`, not `//…`), otherwise `/dashboard` |
-| Dashboard page / Server Component | `requireUser()` → `redirect("/login")` |
+| Dashboard page / Server Component | `requireOnboardedUser()` → `redirect("/login")` (no session) or `redirect("/onboarding")` (no handle) |
 | Server Action | Stop before any database work. Return `{ ok: false, message }` (`FormState`). Never return partial data |
 | Route Handler | Respond `401` |
 | Signed in, but the document isn't theirs | Respond as "not found". Don't reveal that it exists |
@@ -167,7 +185,7 @@ Rules:
 | Sign-in / sign-out URLs, return-URL behaviour | Decided (§2, §6) |
 | Dashboard route group name and protected URL prefix | Decided: `(dashboard)`, `/dashboard` (§3) |
 | `src/proxy.ts` and its Auth.js integration | Decided (§4, layer 1) |
-| Auth helper names and folder | Decided: `getCurrentUser` / `requireUser` in `src/lib/auth/` |
+| Auth helper names and folder | Decided: `getCurrentUser` / `requireUser` / `requireOnboardedUser` in `src/lib/auth/` |
 | How the session exposes `userId`, and its type | Decided: `session.user.id`, a string of the MongoDB `_id` |
 | Server Action error shape | Decided: `FormState` (`src/lib/types/action-result.ts`) |
 | Email verification, password reset, account deletion, OAuth | TBD (not built) |

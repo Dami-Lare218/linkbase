@@ -11,6 +11,7 @@ How Linkbase will store data with **MongoDB + Mongoose**. Read this before addin
 - `src/lib/db/database-target.ts` decides which connection string the process may use and holds the test-database safety checks (§4.1). It is pure (no `server-only`), so the QA scripts and Vitest can import it too.
 - `MONGODB_URI` holds the development connection string (MongoDB Atlas). It lives in the Git-ignored `.env.local`. `.env.example` (committed) lists it with a placeholder.
 - Models in `src/lib/db/models/`: `user.ts` (`User`) and `auth-attempt.ts` (`AuthAttempt`, sign-in rate limiting). Both import `server-only`.
+- Handle data access in `src/lib/users/handle.ts` (`server-only`): `isHandleAvailable()`, `claimHandle()` and `findPublicProfileByHandle()` (§5.2).
 - Authentication exists ([`auth.md`](auth.md)). The signed-in user's ID is `session.user.id`, a string of the user's `_id`.
 - `mongoose` and `mongodb` are on Next.js's automatic `serverExternalPackages` list, so `next.config.ts` needs no change.
 
@@ -96,12 +97,25 @@ export const Example = mongoose.models.Example ?? mongoose.model("Example", exam
 | `name` | String, required, trimmed, 1–50 chars |
 | `email` | String, required, trimmed, lowercased, max 254, basic format check. **Unique index** |
 | `passwordHash` | String (bcrypt), required, **`select: false`**: only returned when a query asks for `+passwordHash` |
-| `handle` | String, optional (picked later during onboarding), trimmed, lowercased, `^[a-z0-9._]{3,30}$`. **Unique partial index**: unique only among users who have one |
+| `handle` | String, optional (picked during onboarding), trimmed, lowercased, 3–30 chars, `^[a-z0-9_-]{3,30}$` (lowercase letters, numbers, hyphens, underscores). Rules live in `src/lib/validation/handle-rules.ts`. **Unique partial index** (`partialFilterExpression: { handle: { $type: "string" } }`): unique only among users who have one, so users without a handle don't collide |
 | `createdAt` / `updatedAt` | `timestamps: true` |
 
 Never send a `User` document to the client. Map it to the fields needed (e.g. `{ id, name, email }`).
 
 **`authattempts`** (`AuthAttempt`, `src/lib/db/models/auth-attempt.ts`): rate-limit counters `{ key, count, expiresAt }`. `key` is `<limit-name>:<sha256>` so no raw emails or IPs are stored. Unique index on `key`, TTL index on `expiresAt` (MongoDB deletes expired windows).
+
+### 5.2 Handles and public profile lookups
+
+`src/lib/users/handle.ts` (`server-only`) is the only code that writes or looks up handles:
+
+| Function | What it does |
+| --- | --- |
+| `isHandleAvailable(handle)` | `false` for reserved names (`RESERVED_HANDLES` in `handle-rules.ts`), otherwise `User.exists({ handle }) === null` |
+| `claimHandle(userId, handle)` | `updateOne({ _id: userId, handle: null }, { $set: { handle } }, { runValidators: true })` (`handle: null` matches a missing or null handle). Returns `"claimed"`, `"already-set"` (no matching user without a handle) or `"taken"` (reserved, or duplicate-key error `11000` from the unique index, which also settles two users claiming the same handle at once) |
+| `findPublicProfileByHandle(handle)` | Normalizes, skips the query for impossible values, returns public fields only `{ handle, name }` or `null`. For the planned `/user/[handle]` page; not used yet |
+
+- Pass handles already normalized and validated (`handleSchema`), and `userId` from the session only.
+- Existing users without a handle need no migration: the partial index ignores them, and they're sent to onboarding on their next visit.
 
 **TBD:** further collections (links, …) and their fields.
 

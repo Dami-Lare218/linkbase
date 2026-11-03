@@ -15,15 +15,19 @@ src/
     globals.css            # Tailwind v4 import + theme mappings
     (auth)/                # /login, /signup, layout, actions.ts (signUp, logIn, logOut)
     (dashboard)/           # layout (SiteNav) + dashboard/page.tsx (/dashboard)
+    onboarding/            # /onboarding (pick a handle) + actions.ts
     api/auth/[...nextauth]/route.ts   # Auth.js route handler
   components/
     ui/                    # Button, Input, Avatar, Wordmark, SiteNav, MobileMenu, …
     landing/               # landing page sections
     auth/                  # login/signup forms, HeaderAuth, UserMenu
+    onboarding/            # HandleOnboarding (client form + live preview), ProfilePreview
   lib/
     auth/                  # Auth.js config, session helpers, password, rate limit
     db/                    # connect.ts + models/ (User, AuthAttempt)
-    validation/            # Zod schemas (auth.ts)
+    onboarding/            # handle field state (pure, shared by the form and its tests)
+    users/                 # handle data access (server-only)
+    validation/            # Zod schemas (auth.ts, handle.ts) + pure handle rules (handle-rules.ts)
     types/                 # shared types (FormState, Auth.js session type)
   styles/tokens.css        # design tokens
 Doc/                       # project docs

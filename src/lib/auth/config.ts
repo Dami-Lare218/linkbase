@@ -7,10 +7,11 @@ import type { NextAuthConfig } from "next-auth";
 
 const DAY_SECONDS = 24 * 60 * 60;
 
-const AUTH_PAGES = ["/login", "/signup"];
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding"];
 
-function isDashboardPath(pathname: string): boolean {
-  return pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+/** Pages that need a session. Whether the user has a handle is checked server-side, not here. */
+function isProtectedPath(pathname: string): boolean {
+  return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 export const authConfig = {
@@ -28,15 +29,15 @@ export const authConfig = {
       const { pathname, search } = request.nextUrl;
       const signedIn = Boolean(auth?.user);
 
-      if (isDashboardPath(pathname) && !signedIn) {
+      if (isProtectedPath(pathname) && !signedIn) {
         const loginUrl = new URL("/login", request.nextUrl);
         loginUrl.searchParams.set("callbackUrl", `${pathname}${search}`);
         return Response.redirect(loginUrl);
       }
 
-      if (AUTH_PAGES.includes(pathname) && signedIn) {
-        return Response.redirect(new URL("/dashboard", request.nextUrl));
-      }
+      // Signed-in visitors on /login and /signup are redirected by those pages
+      // (`RedirectIfSignedIn`), which check the database. A cookie-only check here
+      // would loop for a deleted user whose cookie is still valid.
 
       return true;
     },

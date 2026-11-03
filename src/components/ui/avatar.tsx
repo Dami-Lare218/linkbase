@@ -4,6 +4,8 @@ type AvatarProps = {
   ring?: boolean;
   /** Fallback background colour (any CSS colour). Defaults to grey-300. */
   background?: string;
+  /** Initials colour (any CSS colour). Defaults to white. */
+  color?: string;
   className?: string;
 };
 
@@ -24,16 +26,17 @@ export function Avatar({
   size = 96,
   ring = false,
   background = "var(--lb-gray-300)",
+  color = "var(--lb-white)",
   className = "",
 }: AvatarProps) {
   return (
     <span
       role="img"
       aria-label={name}
-      className={`inline-flex flex-none items-center justify-center overflow-hidden rounded-full font-sans font-semibold text-white ${
+      className={`inline-flex flex-none items-center justify-center overflow-hidden rounded-full font-sans font-semibold ${
         ring ? "shadow-[0_0_0_3px_var(--lb-white)]" : ""
       } ${className}`}
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.38), background }}
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.38), background, color }}
     >
       {getInitials(name)}
     </span>

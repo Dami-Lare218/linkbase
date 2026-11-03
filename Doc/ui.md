@@ -475,7 +475,20 @@ Sections in order:
 - **Claim form:** a white field, height `--control-lg`, padding 0 18, `--radius-md`, `linkba.se/` prefix, plus a `lg` button. It wraps at 220px minimum field width, max-width 520.
 - Imagery is placeholders only. Real photography is **TBD**.
 
-### 7.2 Welcome / onboarding (`Welcome.jsx`): Reference-observed
+### 7.2 Onboarding: pick your handle (`Welcome Handle v3.dc.html`): Implemented
+
+Built at `/onboarding` (`src/app/onboarding/page.tsx`, `src/components/onboarding/`). Supersedes the older `Welcome.jsx` notes kept below for reference.
+
+- **Layout:** a container-query (`@container`) flex-wrap row: form column `flex: 1 1 440px` and a brand aside `flex: 1 1 400px`. They stack into one column when there isn't room for both. Spacing uses `clamp(…, …cqi, …)` as in the design.
+- **Header:** Wordmark 24 · ghost `sm` "Log out" button (`logOut` action).
+- **Form (max-width 440):** H1 "Choose your **Linkbase** handle" (display 800, `clamp(36px, 3.2cqi + 24px, 56px)`, "Linkbase" in `--text-brand`) · lead · `Input` (label "Handle", `linkba.se/` prefix, `maxLength` 30, lowercased as you type) · rules line "3–30 characters. Lowercase letters, numbers, hyphens and underscores only." (`--text-tertiary`) · full-width `lg` button · "Next, you'll add your photo, bio and first links."
+- **States:** empty · invalid ("Remove spaces and symbols to continue.") · short ("Add at least 3 characters.") · checking (spinner, "Checking availability…", after a 450 ms pause) · available (green ring + check, "linkba.se/{handle} is available.") · taken, including reserved names ("That handle is taken. Try another.") · check failed ("Couldn't check availability. Check your connection and try again."; typing again retries) · submitting ("Claiming…", input read-only). The message line is a polite live region. The states are derived by `getHandleFieldState()` (`src/lib/onboarding/handle-field-state.ts`). Lowercasing as you type keeps the caret in place.
+- **Button:** `outline` + disabled until available, then `primary` "Claim my handle".
+- **Preview aside:** `--surface-brand` panel with an example profile card (max-width 320, `--radius-2xl`, `--shadow-xl`): URL pill `linkba.se/{handle}` (grey `yourname` until the format is valid), Avatar "Maya Ortiz" (ink background, tangerine initials), name + role, Instagram/YouTube/TikTok, three LinkButtons, caption "Example profile". The card is `inert`.
+- **Deviation from the design:** the design's rules line allows periods; the product rule is hyphens and underscores, no periods.
+- **Components extended for this screen:** `Button` `outline`/`ghost` variants and `sm` size; `Input` `prefix`, `success`, `trailing`, controlled `value`/`onChange`, `describedBy`, `liveMessage`; `Avatar` `color`; `SocialIcon` `tiktok`.
+
+### 7.2a Welcome / onboarding (`Welcome.jsx`): Reference-observed (superseded)
 - **Grid:** 2 columns (≥1024): a form column and an art panel. Below 1024: one column, no art.
 - **Form column:** padding 36 (24/20 on mobile). Wordmark at 30, then a centred form (max-width 440, gap 24, top margin 72 or 48).
 - **Form contents:** H1 "Welcome to Linkbase!" · lead in `--text-body-lg` / `--text-secondary` · Input with the `linkba.se/` prefix · consent line in `--text-body-sm` · full-width `lg` Continue button.
