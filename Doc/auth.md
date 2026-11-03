@@ -36,7 +36,7 @@ Not built yet: email verification, password reset, account deletion, handle onbo
 | How the session exposes `userId` | `session.user.id`: the user's MongoDB `_id` as a string, copied into the JWT at sign-in |
 | Auth helper folder | `src/lib/auth/` |
 
-Because sessions are JWTs, a session isn't checked against the database on each request. A deleted user stays signed in until the cookie expires.
+Because sessions are JWTs, a session isn't checked against the database on each request. A deleted user stays signed in until the cookie expires. This was observed in QA on 2026-11-03 and is recorded as a known limitation, not fixed: see [`security.md`](security.md) §7.1.
 
 ## 3. Routes
 
@@ -171,6 +171,7 @@ Rules:
 | How the session exposes `userId`, and its type | Decided: `session.user.id`, a string of the MongoDB `_id` |
 | Server Action error shape | Decided: `FormState` (`src/lib/types/action-result.ts`) |
 | Email verification, password reset, account deletion, OAuth | TBD (not built) |
+| Session revocation (ending sessions of deleted or changed users) | TBD: known limitation ([`security.md`](security.md) §7.1) |
 | Use of experimental `unauthorized()` / `forbidden()` | TBD |
 | Public profile fields | TBD |
 | Revalidation after mutations | TBD |

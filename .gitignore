@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+# Playwright MCP snapshots and console logs from QA runs (may hold QA test data)
+/.playwright-mcp/
 
 # next.js
 /.next/

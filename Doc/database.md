@@ -8,6 +8,7 @@ How Linkbase will store data with **MongoDB + Mongoose**. Read this before addin
 
 - `mongoose` ^9 and `server-only` are dependencies.
 - `src/lib/db/connect.ts` exports `connectToDatabase()` (§4). It imports `server-only`, so importing it into a Client Component fails the build.
+- `src/lib/db/database-target.ts` decides which connection string the process may use and holds the test-database safety checks (§4.1). It is pure (no `server-only`), so the QA scripts and Vitest can import it too.
 - `MONGODB_URI` holds the development connection string (MongoDB Atlas). It lives in the Git-ignored `.env.local`. `.env.example` (committed) lists it with a placeholder.
 - Models in `src/lib/db/models/`: `user.ts` (`User`) and `auth-attempt.ts` (`AuthAttempt`, sign-in rate limiting). Both import `server-only`.
 - Authentication exists ([`auth.md`](auth.md)). The signed-in user's ID is `session.user.id`, a string of the user's `_id`.
@@ -51,6 +52,7 @@ Implemented in `src/lib/db/connect.ts`:
 
 - The cache is typed (`{ conn, promise }`) on `globalThis`, with no `any`.
 - `MONGODB_URI` is read **when the helper is first called**, not at import, so `next build` works without it. If it's missing, the helper throws `MONGODB_URI is not set…`, naming the variable but never a value.
+- The URI comes from `resolveDatabaseConfig(process.env)` (§4.1). Configuration and safety errors (`DatabaseConfigError`) are re-thrown as they are: their messages are safe to show.
 - `mongoose.set("strictQuery", true)` is set once (§5).
 - Connect options: `serverSelectionTimeoutMS: 5000` (fail in 5s, not the 30s default) and `bufferCommands: false` (queries error immediately while disconnected). Pool size and other options use driver defaults.
 - On failure the cached promise is cleared and a generic `Could not connect to MongoDB` error is thrown, with the original error as `cause` for server logs. The connection string never reaches a client.
@@ -62,6 +64,20 @@ export const Example = mongoose.models.Example ?? mongoose.model("Example", exam
 ```
 
 **TBD:** tuning connection options (e.g. pool size) for production, once hosting is decided.
+
+### 4.1 Database target: development vs QA
+
+`src/lib/db/database-target.ts` picks the connection string from the environment:
+
+| `LINKBASE_DB_TARGET` | Uses | Set by |
+| --- | --- | --- |
+| unset (normal) | `MONGODB_URI` | `npm run dev`, `npm run build`, production |
+| `test` | `MONGODB_URI_TEST` | `npm run qa:server` only ([`testing.md`](testing.md) §4) |
+
+- **Development and production are unchanged:** without `LINKBASE_DB_TARGET`, the helper behaves exactly as before.
+- In test mode it refuses unless the `MONGODB_URI_TEST` database name ends in `_test`, it differs from `MONGODB_URI` (host + database), and `NODE_ENV` isn't `production`.
+- After connecting in test mode, `connectToDatabase()` checks `connection.name` ends in `_test` (disconnecting if not) and logs the database name, never the URI.
+- Any other `LINKBASE_DB_TARGET` value is an error.
 
 ## 5. Schemas and validation
 
@@ -126,6 +142,7 @@ Users can only read and change their own data. Rules:
 | MongoDB hosting | Development: MongoDB Atlas. Production: TBD |
 | Mongoose version | Decided: ^9 |
 | Connection-string env var name | Decided: `MONGODB_URI` (test: `MONGODB_URI_TEST`, see [`testing.md`](testing.md) §4) |
+| Selecting the test database | Decided: `LINKBASE_DB_TARGET=test` (set by `npm run qa:server`) + `resolveDatabaseConfig()` (§4.1) |
 | Connection options | Decided: `serverSelectionTimeoutMS: 5000`, `bufferCommands: false`, `strictQuery: true`. Production tuning TBD |
 | Missing `MONGODB_URI` | Decided: fail on first use, not at startup or build |
 | Helper file and function names | Decided: `src/lib/db/connect.ts`, `connectToDatabase()` |
