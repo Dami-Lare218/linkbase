@@ -24,7 +24,7 @@ API guidance was checked against the bundled docs for the installed **Next.js 16
 
 - Database queries and reusable data-access logic live in **shared server-side modules under `src/lib/`**, never in components.
 - The connection helper and models are in `src/lib/db/` ([`database.md`](database.md) §3).
-- **TBD:** where query/data-access functions go (inside `src/lib/db/` or a separate folder), their names, and how they're grouped.
+- **Decided:** data-access functions live in a feature folder under `src/lib/` (`src/lib/links/links.ts`, `src/lib/users/handle.ts`), import `server-only`, and return plain objects with string ids.
 - Data-access modules should be **server-only**. Whether to add the `server-only` package (`import "server-only"`) as a guard is **TBD**. Until then, never import these modules into a `"use client"` file.
 - Return **plain, serializable objects**, not Mongoose documents. Documents and `ObjectId`s are class instances. They can't go into `"use cache"` results or Client Component props without conversion (e.g. `.lean()` plus converting IDs to strings). The exact mapping is TBD.
 
@@ -95,6 +95,8 @@ Tags are attached with `cacheTag(...)` inside `"use cache"` scopes. After a **su
 - Revalidation happens on the next request, not at the moment of the call.
 
 A mutation that changes public profile data must also invalidate the cached public profile for that handle.
+
+**Decided:** the dashboard read (`getDashboardData`) is **not cached**: it runs per request behind `<Suspense>`, and dashboard actions call `refresh()` so the page re-renders with fresh data.
 
 **TBD:** tag naming scheme, which reads are tagged, which mutations invalidate which tags, and whether to define custom `cacheLife` profiles in `next.config.ts` (if so, document them here).
 

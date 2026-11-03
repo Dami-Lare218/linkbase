@@ -500,7 +500,18 @@ Built at `/onboarding` (`src/app/onboarding/page.tsx`, `src/components/onboardin
   - **The real availability API and rules are TBD.**
 - **Art panel:** `--lb-butter-300` with rotated decorative cards: a plum profile card with peach pill LinkButtons, a white UrlPill, social circles, and a photo placeholder. It is `aria-hidden`.
 
-### 7.3 Dashboard: content editor (`Dashboard.jsx`): Reference-observed
+### 7.3 Dashboard: links editor (`Dashboard.dc.html`): Implemented
+
+Built at `/dashboard` (`src/components/dashboard/`, page `src/app/(dashboard)/dashboard/page.tsx`) from `Dashboard.dc.html` on design system `e0637ec8`. The reference notes below still describe the layout.
+
+- **Working:** Add (dialog: URL + Title, both required), inline edit (⋮ → Edit; Title + URL, Save/Cancel, Escape cancels), delete (⋮ → Delete → "Delete this link?" confirmation), per-link and footer switches (saved; optimistic), live phone preview of active links and the footer, copy profile URL (toast), Edit/Preview switch and bottom bar on mobile, preview settings (theme Mist/Lilac/Mint/Peach and banner; preview-only, not saved), dismissible banner.
+- **Shown but unavailable (out of scope):** Enhance, Reorder, Archive, Upgrade, Open profile (`/user/[handle]` not built). The drag handle is a glyph only. Header, Design and Settings show "Coming next".
+- **Deviations from the design:** Title is required (the design marks it optional and promises fetched titles); bio, socials and the featured link layout are omitted (no data yet); the account `UserMenu` sits in the header next to Enhance so log out stays reachable. Below 768 px the disabled Enhance icon is hidden so the profile URL has room next to the account menu. Inactive links fade their content (handle, icon tile, text) rather than the whole card, so the open ⋮ menu always stays on top.
+- **Gone links:** if an edit or delete finds the link already removed (e.g. in another tab), the form or dialog closes, the row disappears and an error toast says "That link no longer exists."
+- **Tabs:** the Links tab has `aria-controls` pointing at a `role="tabpanel"` wrapping the list (`Tabs` takes an `idPrefix`).
+- **New components:** `Dialog` (native `<dialog>`), `Switch`, `Toast`, `IconButton`, `SideNavItem`, `Tabs`, `UrlPill`, `AnnouncementBar`, `Select`, the `useMenu` hook (shared with `UserMenu`); `Input` gained `iconLeft`/`autoFocus`, `Button` gained `onClick`.
+
+#### Reference notes (`Dashboard.jsx`)
 - **Shell:** an ink background, with an optional `AnnouncementBar` (inverse, "Upgrade", dismissible) at the top. The app canvas (`--surface-app`) sits below with radius 24 24 0 0 while the banner shows. Padding 20 24 40, or 16 16 96 on mobile.
 - **Header:** a 3-column grid.
   - Left: back IconButton (ghost).

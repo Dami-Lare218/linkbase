@@ -41,6 +41,8 @@ const userSchema = new Schema(
       maxlength: HANDLE_MAX_LENGTH,
       match: HANDLE_PATTERN,
     },
+    // "Join … on Linkbase" footer on the profile. Missing on older users counts as true.
+    showFooter: { type: Boolean, default: true },
   },
   { timestamps: true, strict: true },
 );

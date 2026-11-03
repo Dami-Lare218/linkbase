@@ -44,7 +44,7 @@ Run a feature's QA Scenarios in a real browser against the **test database**. Fi
 
 ## Step 4: Reset QA data
 
-Run `npm run qa:cleanup -- --confirm`. It re-checks that the database is a test database, then deletes only QA users and rate-limit records. Note the counts it prints.
+Run `npm run qa:cleanup -- --confirm`. It re-checks that the database is a test database, then deletes only QA users, the links they own (first) and rate-limit records. Add `--orphaned-links` to also remove links whose owner no longer exists (dry run first). Note the counts it prints.
 
 ## Step 5: Run each scenario
 

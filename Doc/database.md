@@ -10,7 +10,8 @@ How Linkbase will store data with **MongoDB + Mongoose**. Read this before addin
 - `src/lib/db/connect.ts` exports `connectToDatabase()` (§4). It imports `server-only`, so importing it into a Client Component fails the build.
 - `src/lib/db/database-target.ts` decides which connection string the process may use and holds the test-database safety checks (§4.1). It is pure (no `server-only`), so the QA scripts and Vitest can import it too.
 - `MONGODB_URI` holds the development connection string (MongoDB Atlas). It lives in the Git-ignored `.env.local`. `.env.example` (committed) lists it with a placeholder.
-- Models in `src/lib/db/models/`: `user.ts` (`User`) and `auth-attempt.ts` (`AuthAttempt`, sign-in rate limiting). Both import `server-only`.
+- Models in `src/lib/db/models/`: `user.ts` (`User`), `link.ts` (`Link`) and `auth-attempt.ts` (`AuthAttempt`, rate limiting). All import `server-only`.
+- Link data access in `src/lib/links/links.ts` (`server-only`, §5.3).
 - Handle data access in `src/lib/users/handle.ts` (`server-only`): `isHandleAvailable()`, `claimHandle()` and `findPublicProfileByHandle()` (§5.2).
 - Authentication exists ([`auth.md`](auth.md)). The signed-in user's ID is `session.user.id`, a string of the user's `_id`.
 - `mongoose` and `mongodb` are on Next.js's automatic `serverExternalPackages` list, so `next.config.ts` needs no change.
@@ -117,7 +118,24 @@ Never send a `User` document to the client. Map it to the fields needed (e.g. `{
 - Pass handles already normalized and validated (`handleSchema`), and `userId` from the session only.
 - Existing users without a handle need no migration: the partial index ignores them, and they're sent to onboarding on their next visit.
 
-**TBD:** further collections (links, …) and their fields.
+### 5.3 Links
+
+**`links`** (`Link`, `src/lib/db/models/link.ts`): the first user-owned collection.
+
+| Field | Rules |
+| --- | --- |
+| `userId` | ObjectId, `ref: "User"`, required. Set by the server from the session, never from input |
+| `title` | String, required, trimmed, 1–100 chars |
+| `url` | String, required, trimmed, max 2048, validator `isHttpUrl` (absolute `http:`/`https:` URL with a host) |
+| `isActive` | Boolean, default `true`. Only active links show on the profile and in the dashboard preview |
+| `clicks` | Number, min 0, default 0. Click tracking isn't built yet |
+| `createdAt` / `updatedAt` | `timestamps: true` |
+
+- **Index:** `{ userId: 1, createdAt: -1 }` (the dashboard lists a user's links newest first).
+- **`User.showFooter`:** Boolean, default `true` (missing on older users counts as `true`). Controls the "Join … on Linkbase" footer.
+- **Data access** (`src/lib/links/links.ts`): `getDashboardData(userId)` (links + footer setting, as plain objects with string ids), `createLink`, `updateLink`, `deleteLink`, `setLinkActive`, `setShowFooter`. Every write puts `{ _id: id, userId }` in the filter; a match/delete count of 0 is reported as `"not-found"`.
+
+**TBD:** further collections and their fields.
 
 ## 6. Indexes
 
@@ -127,7 +145,9 @@ Never send a `User` document to the client. Map it to the fields needed (e.g. `{
 
 **Decided:** `handle` lives on `users` and is globally unique (partial index, since it's optional).
 
-**TBD:** which other collections have `userId`; whether `autoIndex` stays on in production or indexes are created another way.
+**Decided:** `links` has `userId` with a compound index (§5.3).
+
+**TBD:** further collections with `userId`; whether `autoIndex` stays on in production or indexes are created another way.
 
 ## 7. User data ownership
 
@@ -141,7 +161,9 @@ Users can only read and change their own data. Rules:
 
 **Decided:** the session exposes the user ID as the string `session.user.id` ([`auth.md`](auth.md) §2).
 
-**TBD:** how `userId` is stored on user-owned collections (ObjectId with `ref: "User"` is the natural fit; Mongoose casts the session string in filters), and which data is public, such as content looked up by `handle`.
+**Decided:** `userId` is stored as an ObjectId with `ref: "User"` (`links`); Mongoose casts the session's string id in filters.
+
+**TBD:** which data is public, such as content looked up by `handle`.
 
 ## 8. Caching
 
