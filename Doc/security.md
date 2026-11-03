@@ -14,11 +14,12 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 | `*.pem` Git-ignored | Yes |
 | Env files in repo | Only `.env.example` (placeholders). `.env.local` is created locally by each developer |
 | `.env.example` | **Exists.** Lists `MONGODB_URI` and `MONGODB_URI_TEST` with placeholder values |
-| Security headers / CSP | **None.** `next.config.ts` has no `headers()` and no `proxy.ts` exists |
+| Security headers / CSP | **None.** `next.config.ts` has no `headers()`. `src/proxy.ts` exists but only does optimistic auth redirects ([`auth.md`](auth.md) §4); it sets no headers (§3) |
 | Authentication, authorization | **Yes.** Auth.js email + password, JWT cookie sessions, `requireUser()` in pages ([`auth.md`](auth.md)) |
+| Session revocation | **None (known limitation).** A signed session stays valid until it expires, even after its user is deleted. Observed in QA on 2026-11-03 (§7.1) |
 | Password storage | **Yes.** bcrypt (cost 12), `passwordHash` never selected by default. Login always runs bcrypt, so timing doesn't reveal which emails exist |
-| Rate limiting | **Sign-in and sign-up only** (§4). Link creation not built yet |
-| Server Actions built-in protections | Provided by Next.js when actions are added (§7). No actions exist yet |
+| Rate limiting | **Implemented for sign-in and sign-up only** (`src/lib/auth/rate-limit.ts`, §4). Link creation not built yet |
+| Server Actions built-in protections | Provided by Next.js (§7) for the existing actions: `logIn`, `signUp` and `logOut` in `src/app/(auth)/actions.ts` |
 | Lint rule for `target="_blank"` | **Turned off.** `eslint-config-next` sets `react/jsx-no-target-blank: "off"`, so §6 is not lint-enforced |
 
 ## 2. Secrets and environment variables
@@ -43,10 +44,12 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 
 Established in [`testing.md`](testing.md) §4:
 
-- **`MONGODB_URI_TEST`** holds the test database connection string. It's stored in the **local `.env.test`** file. Neither the file nor a test database exists yet.
-- **`.env.test` must stay Git-ignored** because it may contain database credentials. The existing `.env*` rule in `.gitignore` already covers it. Don't add a `.gitignore` exception for it, and don't force-add it (`git add -f`). This intentionally differs from the Next.js docs, which suggest committing `.env.test`.
-- If `MONGODB_URI_TEST` is listed in `.env.example`, it gets a placeholder value only.
-- Test setup must fail safely, without printing the value, if the variable is missing or points to a non-test database ([`testing.md`](testing.md) §4).
+- **`MONGODB_URI_TEST`** holds the test database connection string (`linkbase_test` on MongoDB Atlas). It's stored in the **local `.env.test`** file, which the user creates.
+- **Only the QA tooling reads it:** `npm run qa:server` passes it to the app with `LINKBASE_DB_TARGET=test`, and `npm run qa:cleanup` uses it directly. Normal dev and production never read it ([`database.md`](database.md) §4.1).
+- **`.env.test` must stay Git-ignored** because it contains database credentials. The existing `.env*` rule in `.gitignore` already covers it. Don't add a `.gitignore` exception for it, and don't force-add it (`git add -f`). This intentionally differs from the Next.js docs, which suggest committing `.env.test`.
+- Claude Code's `.claude/hooks/protect-env-files.mjs` blocks edits to `.env`, `.env.local`, `.env.test` and `.env.development.local`.
+- `MONGODB_URI_TEST` is listed in `.env.example` with a placeholder value only.
+- **Fail-safe checks are implemented** in `src/lib/db/database-target.ts`: the QA tooling refuses to run, without printing any value, if the variable is missing, isn't a `_test` database, or matches `MONGODB_URI` ([`testing.md`](testing.md) §4).
 
 ### Connection strings and secrets: never exposed
 
@@ -59,7 +62,7 @@ Error messages about configuration name the variable and the problem, never its 
 
 ## 3. Security headers
 
-Configure headers in **`next.config.ts`** (the project's actual config file, TypeScript) using the async `headers()` function, which returns `{ source, headers: [{ key, value }] }` entries. A CSP that needs per-request nonces is instead set in **`src/proxy.ts`** (Next.js 16's renamed Middleware). Nothing is configured yet.
+Configure headers in **`next.config.ts`** (the project's actual config file, TypeScript) using the async `headers()` function, which returns `{ source, headers: [{ key, value }] }` entries. A CSP that needs per-request nonces is instead set in **`src/proxy.ts`** (Next.js 16's renamed Middleware). That file exists, but today it only handles optimistic auth redirects for `/dashboard/*`, `/login` and `/signup`. **No security headers or CSP are configured yet**, in either place.
 
 | Header | Purpose | Linkbase value |
 | --- | --- | --- |
@@ -153,6 +156,15 @@ Next.js provides built-in protections for Server Actions:
 
 These don't replace auth checks. Auth.js provides its own CSRF protection for its routes.
 
+### 7.1 Known limitation: session revocation (not fixed)
+
+**Observed on 2026-11-03** during the QA infrastructure run ([`testing.md`](testing.md) §7): a session cookie issued to a QA test user on an earlier run kept granting access to `/dashboard` after that user had been deleted from the test database.
+
+- **Cause:** sessions are JWTs in a signed, encrypted cookie, with no database adapter ([`auth.md`](auth.md) §2). Auth.js verifies the cookie's signature and expiry, and `getCurrentUser()` / `requireUser()` (`src/lib/auth/session.ts`) read only the session, with no database lookup, so nothing checks that the user still exists. A session stays valid until it expires (`maxAge` 30 days), and because it's refreshed while in use (`updateAge` 24 hours), an active session can keep being extended.
+- **Impact today:** low. Account deletion isn't a feature yet, and the only deleted users are QA test accounts. It will matter once users can delete their account, be disabled, change their password, or sign out other devices: none of these can end an existing session.
+- **Status:** **not fixed.** Treat any existing session as valid until expiry when reasoning about access.
+- **Possible future improvements (TBD, needs a decision):** check that the user still exists (and isn't disabled) on the server for protected pages and Server Actions, for example in `requireUser()`; add a per-user session version that is bumped on password change or deletion and compared with the token; switch to database sessions; or shorten `maxAge`. Each trades a database lookup or shorter sessions for revocation.
+
 ## 8. Logs and client responses
 
 - **Never expose** secrets, raw internal errors, stack traces or sensitive user data to the client ([`errors-and-validation.md`](errors-and-validation.md) §6).
@@ -176,3 +188,4 @@ These don't replace auth checks. Auth.js provides its own CSRF protection for it
 | Re-enabling `react/jsx-no-target-blank` | TBD |
 | `serverActions.allowedOrigins` | TBD |
 | Rich text / HTML sanitization (if ever needed) | TBD |
+| Session revocation for deleted, disabled or password-changed users | TBD: known limitation, not fixed (§7.1) |
