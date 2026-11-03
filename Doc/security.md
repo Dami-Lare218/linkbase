@@ -18,7 +18,7 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 | Authentication, authorization | **Yes.** Auth.js email + password, JWT cookie sessions, `requireOnboardedUser()` / `requireUser()` in pages ([`auth.md`](auth.md)) |
 | Session revocation | **Partial.** Pages and Server Actions treat a deleted user as signed out (database lookup in `getCurrentUser()`). The cookie itself stays valid until it expires, and there's no revocation for password changes (§7.1) |
 | Password storage | **Yes.** bcrypt (cost 12), `passwordHash` never selected by default. Login always runs bcrypt, so timing doesn't reveal which emails exist |
-| Rate limiting | **Implemented for sign-in, sign-up and handle onboarding** (`src/lib/auth/rate-limit.ts`, §4). Link creation not built yet |
+| Rate limiting | **Implemented for sign-in, sign-up, handle onboarding and link creation** (`src/lib/auth/rate-limit.ts`, §4) |
 | Server Actions built-in protections | Provided by Next.js (§7) for the existing actions: `logIn`, `signUp` and `logOut` in `src/app/(auth)/actions.ts` |
 | Lint rule for `target="_blank"` | **Turned off.** `eslint-config-next` sets `react/jsx-no-target-blank: "off"`, so §6 is not lint-enforced |
 
@@ -106,6 +106,7 @@ Also worth deciding (documented in the Next.js `headers` reference): `Strict-Tra
   | 5 sign-ups / hour | IP | `signUp` action, after validation |
   | 60 handle availability checks / minute | user id (session cookie only) | `checkHandleAvailability` (live check while typing on `/onboarding`). Runs alongside the lookup, since handles are public |
   | 10 handle claims / 15 min | user id | `claimHandleAction`, after validation |
+  | 30 new links / 10 min | user id | `createLinkAction`, after validation |
 
 - **IP caveat:** the IP is the first `x-forwarded-for` entry. That is only trustworthy behind a proxy that sets the header itself (e.g. Vercel). Without one, clients can spoof it, and the per-email limit is the real protection. Confirm when hosting is decided.
 - **Known trade-off:** sign-up says "An account with this email already exists", which reveals registered emails. The sign-up rate limit softens this. Login messages stay generic.
@@ -127,7 +128,8 @@ Validate before saving and before rendering as `href`:
 - **Parse it as a URL.** Reject anything that doesn't parse.
 - **Allow only `http:` and `https:`.** Reject `javascript:`, `data:`, `vbscript:`, `file:` and others. A `javascript:` href runs code when clicked.
 - Re-check at render time if the data could have bypassed validation (e.g. older records).
-- **TBD:** whether `http:` is allowed or only `https:`, max length, and handling of internationalized/punycode domains.
+- **Decided:** `http:` and `https:` are both allowed; max 2048 characters; no whitespace; a host is required; no auto-prefixing (`maya.design` is rejected). Implemented by `isHttpUrl` in `src/lib/validation/link.ts`, used by the Zod schema, the `Link` model validator and again before rendering (`getLiveLinks`).
+- **TBD:** handling of internationalized/punycode domains.
 
 ## 6. Outbound links
 

@@ -91,7 +91,9 @@ Revalidate **only after the write succeeds**. Never after validation or ownershi
 - Invalidate **every** view the write affects. For example, an edit to data shown on the public profile also invalidates the cached `/user/[handle]` data for that handle ([`data-fetching.md`](data-fetching.md) §6).
 - Tag and path values are stored as plain text. Use IDs or handles, never personal data.
 
-**TBD:** tag naming scheme, which mutations invalidate which tags and paths, and when `revalidatePath` or `refresh()` is preferred over tags.
+**Decided (dashboard):** link actions in `src/app/(dashboard)/dashboard/actions.ts` call `refresh()` (`next/cache`, Server Actions only) after a successful write. The dashboard data is uncached, so refreshing the client router re-renders it with the change in the same response. No tags yet. The action's success reply can reach the page a moment before the refreshed list, so the dashboard applies confirmed changes itself until the refreshed data matches (`applyLinkOverrides` in `src/lib/links/display.ts`): `createLinkAction` and `updateLinkAction` return the saved values in `FormState.values`.
+
+**TBD:** tag naming scheme once something is cached (e.g. public profiles), and which mutations invalidate which tags and paths.
 
 ## 6. Typed results
 

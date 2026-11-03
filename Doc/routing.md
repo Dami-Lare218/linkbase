@@ -20,7 +20,7 @@ src/
       login/page.tsx            # /login
       signup/page.tsx           # /signup
     (dashboard)/
-      layout.tsx                # dashboard shell: SiteNav + user menu (display only)
+      layout.tsx                # ink shell behind the app canvas (display only)
       dashboard/page.tsx        # /dashboard, calls requireOnboardedUser()
     onboarding/
       page.tsx                  # /onboarding: pick a handle (requireUser(); has a handle → /dashboard)
@@ -49,7 +49,7 @@ src/app/
 | `/` landing page | Public | Exists |
 | `/login`, `/signup` in `(auth)` | Public. Signed-in visitors are sent on by the page itself (`RedirectIfSignedIn`), not Proxy: `/dashboard`, or `/onboarding` without a handle | Exists |
 | `/onboarding` | Signed-in only, until a handle is set. Then redirects to `/dashboard` | Exists |
-| `/dashboard` in `(dashboard)` | Signed-in users with a handle (others go to `/onboarding`) | Exists (placeholder content) |
+| `/dashboard` in `(dashboard)` | Signed-in users with a handle (others go to `/onboarding`) | Exists: links editor (add, inline edit, delete, toggles) with live preview; actions in `dashboard/actions.ts` |
 | Add-links page under `/dashboard/…` | Signed-in only | Planned. Exact path TBD |
 | `src/app/api/auth/[...nextauth]` | Auth.js endpoints | Exists |
 | `/user/[handle]` public profile | Public | Planned |
