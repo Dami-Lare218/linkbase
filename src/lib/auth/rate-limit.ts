@@ -16,6 +16,8 @@ export const RATE_LIMITS = {
   // Onboarding, keyed by user id: live availability checks while typing, and claim attempts.
   handleCheck: { limit: 60, windowMs: MINUTE },
   handleClaim: { limit: 10, windowMs: 15 * MINUTE },
+  // Dashboard, keyed by user id.
+  linkCreate: { limit: 30, windowMs: 10 * MINUTE },
 } as const;
 
 type RateLimitName = keyof typeof RATE_LIMITS;

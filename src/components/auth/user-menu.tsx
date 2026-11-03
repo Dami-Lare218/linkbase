@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { ChevronDown, LayoutDashboard, LogOut } from "lucide-react";
 
 import { logOut } from "@/app/(auth)/actions";
 import { Avatar } from "@/components/ui/avatar";
+import { useMenu } from "@/components/ui/use-menu";
 
 type UserMenuProps = {
   name: string;
@@ -19,94 +18,15 @@ const itemClass =
 
 /** Avatar button with an account dropdown: identity, Dashboard and Sign out. */
 export function UserMenu({ name, email }: UserMenuProps) {
-  const [open, setOpen] = useState(false);
-  const menuId = useId();
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const { open, setOpen, rootRef, triggerProps, menuProps } = useMenu();
   const displayName = name || email;
-
-  function getItems(): HTMLElement[] {
-    return Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
-  }
-
-  function close(returnFocus: boolean) {
-    setOpen(false);
-    if (returnFocus) triggerRef.current?.focus();
-  }
-
-  // Focus the first item when the menu opens.
-  useEffect(() => {
-    if (open) menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-  }, [open]);
-
-  // Close on outside click.
-  useEffect(() => {
-    if (!open) return;
-
-    function handlePointerDown(event: PointerEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [open]);
-
-  function handleTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      setOpen(true);
-    } else if (event.key === "Escape" && open) {
-      event.preventDefault();
-      setOpen(false);
-    }
-  }
-
-  function handleMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const items = getItems();
-    const index = items.indexOf(document.activeElement as HTMLElement);
-
-    switch (event.key) {
-      case "ArrowDown":
-        event.preventDefault();
-        items[(index + 1) % items.length]?.focus();
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        items[(index - 1 + items.length) % items.length]?.focus();
-        break;
-      case "Home":
-        event.preventDefault();
-        items[0]?.focus();
-        break;
-      case "End":
-        event.preventDefault();
-        items[items.length - 1]?.focus();
-        break;
-      case "Escape":
-        event.preventDefault();
-        close(true);
-        break;
-      case "Tab":
-        // Let focus move on naturally, and close behind it.
-        setOpen(false);
-        break;
-    }
-  }
 
   return (
     <div ref={rootRef} className="relative flex-none">
       <button
-        ref={triggerRef}
+        {...triggerProps}
         type="button"
         aria-label={`Account menu for ${displayName}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        onClick={() => setOpen((value) => !value)}
-        onKeyDown={handleTriggerKeyDown}
         className="flex h-11 cursor-pointer items-center gap-1 rounded-full border-none bg-transparent p-0 pr-1 text-fg-primary transition-transform duration-[120ms] active:scale-[.94]"
       >
         <Avatar name={displayName} size={40} />
@@ -126,11 +46,8 @@ export function UserMenu({ name, email }: UserMenuProps) {
           <div className="h-px bg-border-subtle" aria-hidden />
 
           <div
-            ref={menuRef}
-            id={menuId}
-            role="menu"
+            {...menuProps}
             aria-label="Account"
-            onKeyDown={handleMenuKeyDown}
             className="flex flex-col gap-1 pt-1"
           >
             <Link

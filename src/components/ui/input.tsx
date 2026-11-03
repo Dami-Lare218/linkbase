@@ -1,5 +1,6 @@
 import type { ChangeEventHandler, HTMLInputAutoCompleteAttribute, HTMLInputTypeAttribute, ReactNode } from "react";
 import { CircleAlert, CircleCheck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 type InputProps = {
   /** Used for the input's `name`, and its `id` unless `id` is set. */
@@ -16,11 +17,15 @@ type InputProps = {
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   spellCheck?: boolean;
   required?: boolean;
+  /** Focus the field when it mounts (e.g. inline edit). */
+  autoFocus?: boolean;
   disabled?: boolean;
   /** Keeps the value but blocks editing (e.g. while submitting), and is still sent with the form. */
   readOnly?: boolean;
   maxLength?: number;
   minLength?: number;
+  /** Icon before the value (design system `iconLeft`), e.g. a link glyph on a URL field. */
+  iconLeft?: LucideIcon;
   /** Fixed text before the value, e.g. `linkba.se/`. */
   prefix?: string;
   /** Content after the value, e.g. a spinner. */
@@ -57,10 +62,12 @@ export function Input({
   autoCapitalize,
   spellCheck,
   required,
+  autoFocus,
   disabled,
   readOnly,
   maxLength,
   minLength,
+  iconLeft: IconLeft,
   prefix,
   trailing,
   error,
@@ -99,6 +106,7 @@ export function Input({
           disabled ? "bg-gray-50 shadow-none" : ring
         }`}
       >
+        {IconLeft ? <IconLeft size={20} aria-hidden className="flex-none text-fg-secondary" /> : null}
         {prefix ? <span className="text-body whitespace-nowrap text-fg-secondary">{prefix}</span> : null}
         <input
           id={inputId}
@@ -112,6 +120,7 @@ export function Input({
           autoCapitalize={autoCapitalize}
           spellCheck={spellCheck}
           required={required}
+          autoFocus={autoFocus}
           disabled={disabled}
           readOnly={readOnly}
           maxLength={maxLength}

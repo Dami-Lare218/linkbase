@@ -13,6 +13,8 @@ type ButtonProps = {
   /** Shows a spinner, and sets `disabled` and `aria-busy`. The label stays, so the width doesn't change. */
   loading?: boolean;
   disabled?: boolean;
+  /** Click handler for `type="button"` buttons (ignored for links). */
+  onClick?: () => void;
   className?: string;
 } & (
   | { href: string; type?: never }
@@ -48,6 +50,7 @@ export function Button({
   loading = false,
   disabled = false,
   className = "",
+  onClick,
   href,
   type = "button",
 }: ButtonProps) {
@@ -75,6 +78,7 @@ export function Button({
       type={href !== undefined ? "button" : type}
       disabled={isDisabled}
       aria-busy={loading || undefined}
+      onClick={onClick}
       className={classes}
     >
       {loading ? (
