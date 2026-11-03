@@ -3,7 +3,8 @@
 
 import path from "node:path";
 
-const PROTECTED_FILES = new Set([".env", ".env.local"]);
+// .env.test and .env.development.local hold database credentials too (QA test database).
+const PROTECTED_FILES = new Set([".env", ".env.local", ".env.test", ".env.development.local"]);
 
 let raw = "";
 process.stdin.setEncoding("utf8");

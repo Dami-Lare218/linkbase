@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "qa:server": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-server.ts",
+    "qa:cleanup": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-cleanup.ts",
+    "qa:stop": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-stop.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
