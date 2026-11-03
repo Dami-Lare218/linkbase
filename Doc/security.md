@@ -15,10 +15,10 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 | Env files in repo | Only `.env.example` (placeholders). `.env.local` is created locally by each developer |
 | `.env.example` | **Exists.** Lists `MONGODB_URI` and `MONGODB_URI_TEST` with placeholder values |
 | Security headers / CSP | **None.** `next.config.ts` has no `headers()`. `src/proxy.ts` exists but only does optimistic auth redirects ([`auth.md`](auth.md) §4); it sets no headers (§3) |
-| Authentication, authorization | **Yes.** Auth.js email + password, JWT cookie sessions, `requireUser()` in pages ([`auth.md`](auth.md)) |
-| Session revocation | **None (known limitation).** A signed session stays valid until it expires, even after its user is deleted. Observed in QA on 2026-11-03 (§7.1) |
+| Authentication, authorization | **Yes.** Auth.js email + password, JWT cookie sessions, `requireOnboardedUser()` / `requireUser()` in pages ([`auth.md`](auth.md)) |
+| Session revocation | **Partial.** Pages and Server Actions treat a deleted user as signed out (database lookup in `getCurrentUser()`). The cookie itself stays valid until it expires, and there's no revocation for password changes (§7.1) |
 | Password storage | **Yes.** bcrypt (cost 12), `passwordHash` never selected by default. Login always runs bcrypt, so timing doesn't reveal which emails exist |
-| Rate limiting | **Implemented for sign-in and sign-up only** (`src/lib/auth/rate-limit.ts`, §4). Link creation not built yet |
+| Rate limiting | **Implemented for sign-in, sign-up and handle onboarding** (`src/lib/auth/rate-limit.ts`, §4). Link creation not built yet |
 | Server Actions built-in protections | Provided by Next.js (§7) for the existing actions: `logIn`, `signUp` and `logOut` in `src/app/(auth)/actions.ts` |
 | Lint rule for `target="_blank"` | **Turned off.** `eslint-config-next` sets `react/jsx-no-target-blank: "off"`, so §6 is not lint-enforced |
 
@@ -97,13 +97,15 @@ Also worth deciding (documented in the Next.js `headers` reference): `Strict-Tra
 - **Rate-limit sign-in attempts and link creation**, as a minimum.
 - Apply the limit **on the server**: in the Server Action (link creation) and in the sign-in flow. Never only on the client.
 - When the limit is hit, return an **expected** error result with a user-facing message ([`data-mutations.md`](data-mutations.md) §4), not a thrown error.
-- **Implemented** in `src/lib/auth/rate-limit.ts`: fixed-window counters in MongoDB (`authattempts`, TTL-expired), updated atomically, so they work across multiple server instances. Keys are SHA-256 hashes; no raw emails or IPs are stored.
+- **Implemented** in `src/lib/auth/rate-limit.ts`: fixed-window counters in MongoDB (`authattempts`, TTL-expired), updated atomically, so they work across multiple server instances. Keys are SHA-256 hashes; no raw emails or IPs are stored. Each check is **one round trip**: a single upsert with an update pipeline either starts a new window (no record, or the window has ended) or counts up (`updatePipeline: true`, required by Mongoose 9).
 
   | Limit | Key | Where |
   | --- | --- | --- |
-  | 5 login attempts / 15 min | email | Credentials `authorize()`, so it also covers direct POSTs to `/api/auth/callback/credentials`. Cleared after a successful login |
+  | 5 login attempts / 15 min | email | Credentials `authorize()`, so it also covers direct POSTs to `/api/auth/callback/credentials`. Cleared after a successful login. The user lookup runs alongside the two login limits; the password is only checked once both allow the attempt, and bcrypt always runs |
   | 20 login attempts / 15 min | IP | Same |
   | 5 sign-ups / hour | IP | `signUp` action, after validation |
+  | 60 handle availability checks / minute | user id (session cookie only) | `checkHandleAvailability` (live check while typing on `/onboarding`). Runs alongside the lookup, since handles are public |
+  | 10 handle claims / 15 min | user id | `claimHandleAction`, after validation |
 
 - **IP caveat:** the IP is the first `x-forwarded-for` entry. That is only trustworthy behind a proxy that sets the header itself (e.g. Vercel). Without one, clients can spoof it, and the per-email limit is the real protection. Confirm when hosting is decided.
 - **Known trade-off:** sign-up says "An account with this email already exists", which reveals registered emails. The sign-up rate limit softens this. Login messages stay generic.
@@ -156,13 +158,13 @@ Next.js provides built-in protections for Server Actions:
 
 These don't replace auth checks. Auth.js provides its own CSRF protection for its routes.
 
-### 7.1 Known limitation: session revocation (not fixed)
+### 7.1 Known limitation: session revocation (partly mitigated)
 
 **Observed on 2026-11-03** during the QA infrastructure run ([`testing.md`](testing.md) §7): a session cookie issued to a QA test user on an earlier run kept granting access to `/dashboard` after that user had been deleted from the test database.
 
-- **Cause:** sessions are JWTs in a signed, encrypted cookie, with no database adapter ([`auth.md`](auth.md) §2). Auth.js verifies the cookie's signature and expiry, and `getCurrentUser()` / `requireUser()` (`src/lib/auth/session.ts`) read only the session, with no database lookup, so nothing checks that the user still exists. A session stays valid until it expires (`maxAge` 30 days), and because it's refreshed while in use (`updateAge` 24 hours), an active session can keep being extended.
+- **Cause:** sessions are JWTs in a signed, encrypted cookie, with no database adapter ([`auth.md`](auth.md) §2). Auth.js verifies the cookie's signature and expiry, and, before onboarding, `getCurrentUser()` / `requireUser()` (`src/lib/auth/session.ts`) read only the session, with no database lookup, so nothing checked that the user still existed (now they do; see Status). A session stays valid until it expires (`maxAge` 30 days), and because it's refreshed while in use (`updateAge` 24 hours), an active session can keep being extended.
 - **Impact today:** low. Account deletion isn't a feature yet, and the only deleted users are QA test accounts. It will matter once users can delete their account, be disabled, change their password, or sign out other devices: none of these can end an existing session.
-- **Status:** **not fixed.** Treat any existing session as valid until expiry when reasoning about access.
+- **Status:** **partly mitigated (onboarding, 2026-11-03).** `getCurrentUser()` now loads the user from the database on every request, so `requireUser()`, `requireOnboardedUser()` and every Server Action treat a deleted user as signed out. Still open: Proxy only sees the cookie (a deleted user's cookie passes Proxy, then the page redirects to `/login`), the cookie is not cleared or revoked, and there's no way to end sessions after a password change or on other devices.
 - **Possible future improvements (TBD, needs a decision):** check that the user still exists (and isn't disabled) on the server for protected pages and Server Actions, for example in `requireUser()`; add a per-user session version that is bumped on password change or deletion and compared with the token; switch to database sessions; or shorten `maxAge`. Each trades a database lookup or shorter sessions for revocation.
 
 ## 8. Logs and client responses

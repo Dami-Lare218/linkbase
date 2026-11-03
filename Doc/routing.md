@@ -21,13 +21,16 @@ src/
       signup/page.tsx           # /signup
     (dashboard)/
       layout.tsx                # dashboard shell: SiteNav + user menu (display only)
-      dashboard/page.tsx        # /dashboard, calls requireUser()
+      dashboard/page.tsx        # /dashboard, calls requireOnboardedUser()
+    onboarding/
+      page.tsx                  # /onboarding: pick a handle (requireUser(); has a handle → /dashboard)
+      actions.ts                # checkHandleAvailability, claimHandleAction
     api/auth/[...nextauth]/
       route.ts                  # Auth.js route handler (GET, POST)
 ```
 
 - No dynamic segments, `loading.tsx`, `error.tsx` or `not-found.tsx` yet.
-- `next.config.ts` enables `cacheComponents` and `partialPrefetching`, which affect how loading states and layouts behave (§5). `/` and `/dashboard` build as partial prerenders: a static shell, with the signed-in parts streamed behind `<Suspense>`.
+- `next.config.ts` enables `cacheComponents` and `partialPrefetching`, which affect how loading states and layouts behave (§5). `/`, `/dashboard` and `/onboarding` build as partial prerenders: a static shell, with the signed-in parts streamed behind `<Suspense>`.
 
 ## 2. Route map
 
@@ -44,8 +47,9 @@ src/app/
 | Route | Access | Status |
 | --- | --- | --- |
 | `/` landing page | Public | Exists |
-| `/login`, `/signup` in `(auth)` | Public. Signed-in visitors are sent to `/dashboard` by Proxy | Exists |
-| `/dashboard` in `(dashboard)` | Signed-in only | Exists (placeholder content) |
+| `/login`, `/signup` in `(auth)` | Public. Signed-in visitors are sent on by the page itself (`RedirectIfSignedIn`), not Proxy: `/dashboard`, or `/onboarding` without a handle | Exists |
+| `/onboarding` | Signed-in only, until a handle is set. Then redirects to `/dashboard` | Exists |
+| `/dashboard` in `(dashboard)` | Signed-in users with a handle (others go to `/onboarding`) | Exists (placeholder content) |
 | Add-links page under `/dashboard/…` | Signed-in only | Planned. Exact path TBD |
 | `src/app/api/auth/[...nextauth]` | Auth.js endpoints | Exists |
 | `/user/[handle]` public profile | Public | Planned |
@@ -76,7 +80,8 @@ Keep one top-level root layout (`src/app/layout.tsx`). Giving each group its own
 - Type props with `PageProps<"/user/[handle]">`. `params` is a Promise: `const { handle } = await props.params`.
 - No sign-in required. Show public data only ([`auth.md`](auth.md) §7).
 - For an unknown handle, call `notFound()` (optionally with a `not-found.tsx` in that segment).
-- **TBD:** handle format and validation, whether profiles are prerendered (`generateStaticParams`) or rendered on demand, and caching ([`database.md`](database.md) §8).
+- Handle format is decided: `^[a-z0-9_-]{3,30}$` ([`database.md`](database.md) §5.1). Look profiles up with `findPublicProfileByHandle()` ([`database.md`](database.md) §5.2), which returns `null` for unknown or malformed handles → `notFound()`.
+- **TBD:** whether profiles are prerendered (`generateStaticParams`) or rendered on demand, and caching ([`database.md`](database.md) §8).
 
 ## 5. Authenticated routes: `(dashboard)`
 
@@ -130,8 +135,9 @@ These route files use **default exports** (required by Next.js). That's the one 
 | Dashboard URL prefix and dashboard path | Decided: `/dashboard` |
 | Add-links path | TBD |
 | Auth page paths, and behaviour for signed-in visitors | Decided: `/login`, `/signup`; signed-in → `/dashboard` |
-| `src/proxy.ts` and its matcher | Decided: `/dashboard/:path*`, `/login`, `/signup` |
-| `/user/[handle]` prerendering, caching, handle validation | TBD |
+| `src/proxy.ts` and its matcher | Decided: `/dashboard/:path*`, `/onboarding/:path*` (`/login` and `/signup` redirect signed-in users on the page, see [`auth.md`](auth.md) §4) |
+| `/user/[handle]` handle validation | Decided: `^[a-z0-9_-]{3,30}$`, unique, set during onboarding |
+| `/user/[handle]` prerendering, caching | TBD |
 | Which segments get `loading.tsx` / `error.tsx`. `global-error.tsx`, `not-found.tsx` | TBD |
 | Auth.js route handler path | Decided: `src/app/api/auth/[...nextauth]/route.ts` |
 | Webhooks / third-party callbacks | TBD |

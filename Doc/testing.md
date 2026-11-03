@@ -46,7 +46,7 @@ How Linkbase is tested: Vitest unit tests for pure logic, and Playwright MCP-dri
   - `resolve.tsconfigPaths: true`: Vite 8's built-in tsconfig path resolution, so `@/*` → `src/*` works in tests exactly as in app code. No `vite-tsconfig-paths` plugin.
 - **Run:** `npm run test` (`vitest run`). It runs once and exits.
 - **Unit tests never touch MongoDB.** Nothing a unit test imports may call `connectToDatabase()`, read `process.env`, or use Mongoose models. Database behaviour is covered by QA (§3, §4).
-- **Existing tests:** `src/lib/validation/auth.test.ts` covers valid input, normalisation (trimming, lowercased email, passwords kept as typed, unknown fields dropped), the first field-level message each form shows, and length limits (including the 72-byte password limit).
+- **Existing tests:** `src/lib/onboarding/handle-field-state.test.ts` covers every state of the onboarding handle field (format errors, checking, available, taken, rate limited, failed check, stale replies, rejected claims); `src/lib/auth/home-path.test.ts` covers where signed-in users are sent. `src/lib/validation/handle-rules.test.ts` and `handle.test.ts` cover handle normalization, valid handles, invalid characters (spaces, periods, symbols, uppercase, accents, emoji), length boundaries 2/3/30/31, reserved names, non-string input and the field-level messages; duplicate handles are database behaviour and are covered by QA. `src/lib/validation/auth.test.ts` covers valid input, normalisation (trimming, lowercased email, passwords kept as typed, unknown fields dropped), the first field-level message each form shows, and length limits (including the 72-byte password limit).
 
 **TBD:** coverage tooling and thresholds, and whether CI runs the tests (no CI exists).
 
@@ -170,3 +170,32 @@ The QA infrastructure plan (`plans/feature-qa-infrastructure.md`, local only) wa
 - **Session revocation:** a signed session cookie issued earlier kept granting `/dashboard` access after its QA user had been deleted. This is a known limitation of the JWT sessions, not fixed: see [`security.md`](security.md) §7.1.
 - **Clean browser:** the Playwright MCP keeps its browser profile, so `browser_close` alone does not clear cookies. Clear the browser context's cookies before each scenario so no session carries over (§5).
 - **Intermittent connections:** `qa:cleanup` sometimes failed with `MongooseServerSelectionError` while the app connected normally. Retrying succeeded. If it recurs, check MongoDB Atlas Network Access for the current IP address.
+
+### Onboarding (pick your handle): passed on 2026-11-03
+
+The onboarding plan (`plans/feat/onboarding-handle.md`, local only) was run through `run-qa-suite` (run `20261103t1522`, test database `linkbase_test`). **All six planned scenarios passed**, after two fixes found during the run.
+
+| # | Scenario | Result | How it was verified |
+| --- | --- | --- | --- |
+| 1 | Sign up → `/onboarding`; type `Maya_Ortiz-1` → `maya_ortiz-1`, live preview, "available"; claim → `/dashboard`; persists after refresh | **Pass** | Final URLs, "Checking availability…" then "linkba.se/maya_ortiz-1 is available.", preview pill `linkba.se/maya_ortiz-1`, `/onboarding` → `/dashboard` after claiming and after reload |
+| 2 | No handle → `/dashboard` and login go to `/onboarding`; signed out `/onboarding` → `/login` | **Pass** (attempt 2) | `/login?callbackUrl=%2Fonboarding`; signed-in `/dashboard`, `/login` and post-login all ended on `/onboarding` |
+| 3 | Taken, uppercase-taken and reserved (`admin`) handles; forced submit; **two users claiming the same handle at once** | **Pass** | "That handle is taken. Try another." live and from the server; the losing user still had no handle; in the simultaneous claim one user got the handle and the other the taken error |
+| 4 | `mo`, `maya ortiz!`, `maya.ortiz` → inline errors, Claim disabled; forced 31-character and invalid submits rejected by the server | **Pass** | Messages from the plan, `aria-invalid`, server log showed `claimHandleAction` returning field errors; nothing saved |
+| 5 | User with a handle → `/onboarding` redirects to `/dashboard`; handle unchanged (also a second tab submitting a different handle) | **Pass** | Second tab's claim redirected to `/dashboard`; the first handle stayed taken and the second stayed available |
+| 6 | 375 px and 1440 px layouts; Log out → `/` | **Pass** | Two columns at 1440 (form 440 px, H1 56 px, brand panel); one column at 375 with no horizontal overflow; geometry matches the v3 design file rendered locally |
+
+**Fixes made during the run:**
+- **Redirect loop for a deleted user's cookie:** Proxy sent signed-in cookies from `/login` to `/dashboard`, while the database-backed page check sent the (deleted) user back to `/login`. The signed-in redirect for `/login` and `/signup` moved from Proxy into the pages (`RedirectIfSignedIn`); Proxy's matcher is now `/dashboard/:path*`, `/onboarding/:path*` ([`auth.md`](auth.md) §4).
+- **Dev prerender error** `crypto.getRandomValues()` on `/onboarding` and `/signup`: `getCurrentUser()` now starts with `await connection()`.
+
+**Notes:** sign-ups took 3–20 s on this network (remote Atlas), so waits were raised to 60 s. The public IP changed several times between attempts, which blocked the first runs until Atlas Network Access allowed it.
+
+#### Final review run (run `20261103t1606`): passed
+
+After the review fixes (direct redirects from `/login` and `/signup`, single-round-trip rate limiter, failed-check message, caret-preserving lowercasing, `handle: null` claim filter), all six scenarios were run again and **passed on the first attempt**, with no application errors in the server log. Extra checks:
+
+- `/login` and `/signup` while signed in go straight to `/onboarding` (no handle) or `/dashboard` (handle), with no intermediate page.
+- **Rate limiter regression:** the 6th sign-up in an hour and the 6th wrong password for an email were refused (the correct password too, while limited); the 11th handle claim in 15 minutes was refused; 61 availability checks spread over two one-minute windows were all allowed, so expired windows reset.
+- **Failed availability check:** with the browser offline, the field showed "Couldn't check availability…", Claim stayed disabled, and typing again recovered.
+- **Layout:** the heading scales as in the design (56 px at 1440, 52.8 px at 900, 36 px at 375); no horizontal overflow at any width.
+- **Latency:** availability checks averaged about 320 ms (87 checks), down from about 650–1,000 ms. Sign-ups make 4 database round trips instead of 7; they still take about 4–6 s on this network, mostly bcrypt (cost 12, pure-JS `bcryptjs`: about 0.8 s to hash plus 0.6 s to verify) and Atlas latency.

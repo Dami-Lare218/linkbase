@@ -10,6 +10,7 @@ Checked against the bundled Next.js 16.4.3 docs: `01-getting-started/10-error-ha
 
 - **Zod 4** (`zod` ^4) is a direct dependency.
 - `src/lib/validation/auth.ts`: `signUpSchema`, `logInSchema` and their `z.infer` types.
+- `src/lib/validation/handle.ts`: `handleSchema` (normalizes, then checks the format) and `claimHandleSchema`. The rules and messages live in the pure `handle-rules.ts`, which the client form also uses for instant feedback; the server always re-validates. "Handle taken" is an expected error returned as a field error, never thrown.
 - `src/lib/types/action-result.ts`: `FormState`, the shared Server Action result (§4).
 - Server Actions `signUp`, `logIn`, `logOut` in `src/app/(auth)/actions.ts`, with client forms in `src/components/auth/`.
 - **Not present yet:** `error.tsx`, `global-error.tsx` and a logging setup. Unexpected errors currently fall back to Next.js's default error page.
