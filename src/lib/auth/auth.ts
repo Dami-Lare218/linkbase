@@ -40,13 +40,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         await connectToDatabase();
 
         const ip = getClientIp(request.headers);
-        const [ipAllowed, emailAllowed] = await Promise.all([
+        // In parallel to save a database round trip. The password is only checked once
+        // both limits allow the attempt.
+        const [ipAllowed, emailAllowed, user] = await Promise.all([
           consumeRateLimit("logInIp", ip),
           consumeRateLimit("logInEmail", email),
+          User.findOne({ email }).select("+passwordHash").lean(),
         ]);
         if (!ipAllowed || !emailAllowed) throw new RateLimited();
 
-        const user = await User.findOne({ email }).select("+passwordHash").lean();
         // Always runs bcrypt, so response time doesn't reveal whether the email exists.
         const passwordMatches = await verifyPassword(password, user?.passwordHash ?? null);
         if (!user || !passwordMatches) throw new InvalidCredentials();

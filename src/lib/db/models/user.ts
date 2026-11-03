@@ -3,7 +3,7 @@ import "server-only";
 import mongoose, { Schema } from "mongoose";
 import type { InferSchemaType, Model } from "mongoose";
 
-export const HANDLE_PATTERN = /^[a-z0-9._]{3,30}$/;
+import { HANDLE_MAX_LENGTH, HANDLE_MIN_LENGTH, HANDLE_PATTERN } from "@/lib/validation/handle-rules";
 
 // Basic shape check only. Zod validates emails properly at the Server Action boundary.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -31,11 +31,14 @@ const userSchema = new Schema(
       required: true,
       select: false,
     },
-    // Chosen later during onboarding, so it's optional at signup.
+    // Chosen during onboarding, so it's optional at signup. Identifies the public
+    // profile (/user/[handle]). Rules live in `handle-rules.ts`.
     handle: {
       type: String,
       trim: true,
       lowercase: true,
+      minlength: HANDLE_MIN_LENGTH,
+      maxlength: HANDLE_MAX_LENGTH,
       match: HANDLE_PATTERN,
     },
   },
@@ -43,7 +46,8 @@ const userSchema = new Schema(
 );
 
 userSchema.index({ email: 1 }, { unique: true });
-// Unique only among users who have picked a handle.
+// Unique only among users who have picked a handle, so users without one don't collide.
+// Also serves public profile lookups by handle.
 userSchema.index(
   { handle: 1 },
   { unique: true, partialFilterExpression: { handle: { $type: "string" } } },

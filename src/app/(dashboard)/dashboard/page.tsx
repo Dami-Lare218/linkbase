@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 
-import { requireUser } from "@/lib/auth/session";
+import { requireOnboardedUser } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
   title: "Dashboard · Linkbase",
@@ -18,8 +18,8 @@ export default function DashboardPage() {
 }
 
 async function DashboardContent() {
-  // The authoritative check. Proxy's redirect is only a shortcut.
-  const user = await requireUser();
+  // The authoritative check (session + handle). Proxy's redirect is only a shortcut.
+  const user = await requireOnboardedUser();
 
   return (
     <>

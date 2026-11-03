@@ -13,6 +13,9 @@ export const RATE_LIMITS = {
   logInEmail: { limit: 5, windowMs: 15 * MINUTE },
   logInIp: { limit: 20, windowMs: 15 * MINUTE },
   signUpIp: { limit: 5, windowMs: 60 * MINUTE },
+  // Onboarding, keyed by user id: live availability checks while typing, and claim attempts.
+  handleCheck: { limit: 60, windowMs: MINUTE },
+  handleClaim: { limit: 10, windowMs: 15 * MINUTE },
 } as const;
 
 type RateLimitName = keyof typeof RATE_LIMITS;
@@ -38,17 +41,27 @@ export async function consumeRateLimit(name: RateLimitName, value: string): Prom
   const now = new Date();
   const nextExpiry = new Date(now.getTime() + windowMs);
 
-  // MongoDB's TTL sweep runs about once a minute, so restart an expired window ourselves.
-  await AuthAttempt.updateOne(
-    { key, expiresAt: { $lte: now } },
-    { $set: { count: 0, expiresAt: nextExpiry } },
-  );
-
+  // One round trip: a single atomic upsert either starts a new window (no record yet, or
+  // the window has ended; MongoDB's TTL sweep only runs about once a minute) or counts up.
+  // Expressions in one $set stage all read the stored values, so both use the same test.
+  const windowOver = {
+    $or: [{ $eq: [{ $type: "$expiresAt" }, "missing"] }, { $lte: ["$expiresAt", now] }],
+  };
   const increment = () =>
     AuthAttempt.findOneAndUpdate(
       { key },
-      { $inc: { count: 1 }, $setOnInsert: { expiresAt: nextExpiry } },
-      { upsert: true, returnDocument: "after", lean: true },
+      // A fresh array per call: Mongoose appends an `updatedAt` stage to it.
+      [
+        {
+          $set: {
+            count: { $cond: [windowOver, 1, { $add: ["$count", 1] }] },
+            expiresAt: { $cond: [windowOver, nextExpiry, "$expiresAt"] },
+            createdAt: { $ifNull: ["$createdAt", now] },
+          },
+        },
+      ],
+      // Pipelines aren't cast by Mongoose, so every value above is already a Date or number.
+      { upsert: true, returnDocument: "after", lean: true, updatePipeline: true },
     );
 
   let attempt;
