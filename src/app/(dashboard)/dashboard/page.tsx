@@ -21,7 +21,7 @@ async function DashboardContent() {
   // The authoritative check (session + handle). Proxy's redirect is only a shortcut.
   const user = await requireOnboardedUser();
   // Scoped to the signed-in user; uncached, so every request (and refresh()) is current.
-  const { links, showFooter } = await getDashboardData(user.id);
+  const { links, showFooter, image } = await getDashboardData(user.id);
 
   return (
     <LinksDashboard
@@ -30,6 +30,7 @@ async function DashboardContent() {
       handle={user.handle}
       links={links}
       showFooter={showFooter}
+      image={image}
     />
   );
 }

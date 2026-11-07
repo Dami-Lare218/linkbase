@@ -4,6 +4,7 @@ import mongoose, { Schema } from "mongoose";
 import type { InferSchemaType, Model } from "mongoose";
 
 import { HANDLE_MAX_LENGTH, HANDLE_MIN_LENGTH, HANDLE_PATTERN } from "@/lib/validation/handle-rules";
+import { isBlobAvatarUrl } from "@/lib/validation/profile-picture";
 
 // Basic shape check only. Zod validates emails properly at the Server Action boundary.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -43,6 +44,11 @@ const userSchema = new Schema(
     },
     // "Join … on Linkbase" footer on the profile. Missing on older users counts as true.
     showFooter: { type: Boolean, default: true },
+    // Profile picture: the URL of a processed WebP in Vercel Blob (never the image itself).
+    image: {
+      type: String,
+      validate: { validator: isBlobAvatarUrl, message: "image must be a Vercel Blob avatar URL" },
+    },
   },
   { timestamps: true, strict: true },
 );

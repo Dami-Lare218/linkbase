@@ -13,6 +13,7 @@
     "qa:stop": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-stop.ts"
   },
   "dependencies": {
+    "@vercel/blob": "^2.8.2",
     "bcryptjs": "^3.0.3",
     "lucide-react": "^1.66.0",
     "mongoose": "^9.11.4",
@@ -21,6 +22,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {

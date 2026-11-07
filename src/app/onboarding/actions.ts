@@ -1,5 +1,6 @@
 "use server";
 
+import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
@@ -10,6 +11,7 @@ import { connectToDatabase } from "@/lib/db/connect";
 import type { HandleAvailability } from "@/lib/onboarding/handle-field-state";
 import type { FormState } from "@/lib/types/action-result";
 import { claimHandle, isHandleAvailable } from "@/lib/users/handle";
+import { profileTag } from "@/lib/users/public-profile";
 import { claimHandleSchema, handleSchema } from "@/lib/validation/handle";
 import { HANDLE_MESSAGES } from "@/lib/validation/handle-rules";
 
@@ -84,6 +86,8 @@ export async function claimHandleAction(
     return { ok: false, fieldErrors: { handle: [HANDLE_MESSAGES.taken] }, values: { handle } };
   }
 
+  // The handle's public page may have been cached as a 404 before it was claimed.
+  if (result === "claimed") updateTag(profileTag(handle));
   // "claimed", or "already-set" if another tab claimed one first. Outside any try block.
   redirect(DASHBOARD_PATH);
 }

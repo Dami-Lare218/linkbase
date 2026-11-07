@@ -90,6 +90,28 @@ export function loadQaDatabase(): QaDatabase {
 }
 
 /**
+ * The read-write token of the separate **test** Vercel Blob store (`BLOB_READ_WRITE_TOKEN_TEST`
+ * in `.env.test`), so QA uploads never land in the development store. Refuses when it's missing
+ * or is the same token as the development `BLOB_READ_WRITE_TOKEN`. Never printed.
+ */
+export function loadQaBlobToken(): string {
+  const token = readEnvFile(".env.test")?.BLOB_READ_WRITE_TOKEN_TEST?.trim();
+  if (!token) {
+    throw new DatabaseConfigError(
+      "BLOB_READ_WRITE_TOKEN_TEST is not set in .env.test. Create a separate Vercel Blob store for QA and add its token.",
+    );
+  }
+  const devToken =
+    process.env.BLOB_READ_WRITE_TOKEN ?? readEnvFile(".env.local")?.BLOB_READ_WRITE_TOKEN ?? readEnvFile(".env")?.BLOB_READ_WRITE_TOKEN;
+  if (devToken && devToken.trim() === token) {
+    throw new DatabaseConfigError(
+      "BLOB_READ_WRITE_TOKEN_TEST is the same as BLOB_READ_WRITE_TOKEN. QA needs its own Blob store.",
+    );
+  }
+  return token;
+}
+
+/**
  * Prints an error without risking a connection string: safety messages in full, anything else by
  * error name only (driver messages can include host names). Sets a failing exit code.
  */
