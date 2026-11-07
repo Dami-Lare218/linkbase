@@ -28,7 +28,7 @@ Checked against the bundled Next.js 16.4.3 docs: `02-guides/content-security-pol
 - Local secrets go in **`.env.local`**, which stays Git-ignored.
 - **Only `NEXT_PUBLIC_`-prefixed variables reach the browser.** Next.js inlines them into the client bundle at build time. **Never give a secret a `NEXT_PUBLIC_` prefix.** All other variables stay server-only.
 - Read secrets only in server code (Server Components, Server Actions, Route Handlers, `src/lib/` server modules).
-- Production secrets are set in the hosting platform's environment, not in files. Hosting is **TBD**.
+- Production secrets are set in the hosting platform's environment, not in files. Hosting is **Vercel** (Preview and Production scopes, [`deployment.md`](deployment.md) §6, §10.1); GitHub Actions uses no secrets.
 - For multi-instance or self-hosted deploys, Next.js documents `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (a stable key for Server Action closure encryption). Whether Linkbase needs it depends on hosting: **TBD**.
 
 ### `.env.example`
@@ -79,7 +79,7 @@ Also worth deciding (documented in the Next.js `headers` reference): `Strict-Tra
 - **Scripts:** Next.js inline bootstrap scripts, and any third-party scripts.
 - **Styles:** Tailwind v4 output, `next/font` (Geist), and any inline styles.
 - **Auth flow:** the Auth.js routes under `/api/auth/*` and the `/login` / `/signup` forms (Server Actions post to the same origin). No third-party provider domains: only the credentials provider exists.
-- **Images and other external services:** analytics, avatars, link previews, etc. None decided.
+- **Images and other external services:** profile pictures are served from Vercel Blob (`https://*.public.blob.vercel-storage.com/avatars/…`, also the only `images.remotePatterns` entry). Analytics and link previews: none decided.
 - **Dev vs prod:** development needs `'unsafe-eval'` (React debugging). Production doesn't.
 
 **Strategy conflict to resolve first.** The Next.js docs offer three approaches. Each has trade-offs for this project:
@@ -107,6 +107,7 @@ Also worth deciding (documented in the Next.js `headers` reference): `Strict-Tra
   | 60 handle availability checks / minute | user id (session cookie only) | `checkHandleAvailability` (live check while typing on `/onboarding`). Runs alongside the lookup, since handles are public |
   | 10 handle claims / 15 min | user id | `claimHandleAction`, after validation |
   | 30 new links / 10 min | user id | `createLinkAction`, after validation |
+  | 10 profile picture uploads / hour | user id | `uploadProfilePictureAction`, after the cheap checks, before reading and processing the file |
 
 - **IP caveat:** the IP is the first `x-forwarded-for` entry. That is only trustworthy behind a proxy that sets the header itself (e.g. Vercel). Without one, clients can spoof it, and the per-email limit is the real protection. Confirm when hosting is decided.
 - **Known trade-off:** sign-up says "An account with this email already exists", which reveals registered emails. The sign-up rate limit softens this. Login messages stay generic.
@@ -130,6 +131,16 @@ Validate before saving and before rendering as `href`:
 - Re-check at render time if the data could have bypassed validation (e.g. older records).
 - **Decided:** `http:` and `https:` are both allowed; max 2048 characters; no whitespace; a host is required; no auto-prefixing (`maya.design` is rejected). Implemented by `isHttpUrl` in `src/lib/validation/link.ts`, used by the Zod schema, the `Link` model validator and again before rendering (`getLiveLinks`).
 - **TBD:** handling of internationalized/punycode domains.
+
+### 5.1 Profile picture uploads
+
+- **Owner only:** the upload and remove actions take the user id from the session; the client can't name a user or a file. The file to delete is read from the user's own record.
+- **Server-side checks, in order:** authenticated + handle → `File` present, size 1 B–**2 MB**, declared type `image/jpeg`/`image/png`/`image/webp` → rate limit → the first bytes must really be JPEG/PNG/WebP (`detectImageType`) → `sharp` decodes it (`failOn: "error"`, `limitInputPixels` 40 MP against decompression bombs). Browser checks are for instant feedback only.
+- **Re-encoding:** every upload is rotated by EXIF, cropped to 512×512 and saved as WebP. This drops all metadata, **including GPS location**, and means only images the server produced are stored.
+- **Storage:** Vercel Blob, public access, `BLOB_READ_WRITE_TOKEN` (server-only, `.env.local`). QA uses a **separate store** (`BLOB_READ_WRITE_TOKEN_TEST` in `.env.test`); `qa:server` and `qa:cleanup` refuse if it is missing or equal to the dev token.
+- **Token always passed explicitly:** `avatar-storage.ts` passes `BLOB_READ_WRITE_TOKEN` as the `token` option on every `put`/`del`. Without it, `@vercel/blob` prefers Vercel OIDC credentials (`VERCEL_OIDC_TOKEN` + `BLOB_STORE_ID`, added by `vercel env pull`) over the token, which could send QA uploads to the dev store. A value that isn't shaped like a read-write token (`isBlobReadWriteToken`) is refused locally, with no network call.
+- **Storage failures:** a missing token or a failed Blob call returns "Couldn't save your picture right now. Try again in a moment." (error name logged only). A request the server rejects (over the 2.2 MB body limit, or a lost connection) shows the same message instead of the error page.
+- **Request size:** `experimental.serverActions.bodySizeLimit` is `2.2mb` (2 MB file + multipart overhead).
 
 ## 6. Outbound links
 
@@ -182,7 +193,7 @@ These don't replace auth checks. Auth.js provides its own CSRF protection for it
 | --- | --- |
 | Env variable names and `.env.example` contents | Decided: `MONGODB_URI`, `MONGODB_URI_TEST` (in `.env.test`, see [`testing.md`](testing.md)), `AUTH_SECRET`. Production values TBD |
 | `.gitignore` exception for `.env.example` | Decided: `!.env.example` |
-| Hosting, and need for `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | TBD |
+| Hosting, and need for `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | Hosting: Vercel ([`deployment.md`](deployment.md)). The key is only needed for multi-instance self-hosting, which isn't planned |
 | CSP strategy (nonce / static / SRI) and directives | TBD |
 | CSP report-only rollout and reporting endpoint | TBD |
 | `X-Frame-Options` and `Referrer-Policy` values | TBD |

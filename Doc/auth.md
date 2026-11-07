@@ -45,7 +45,7 @@ Because sessions are JWTs, the cookie itself stays valid until it expires, even 
 | --- | --- | --- |
 | `src/app/(dashboard)/dashboard/…` | `/dashboard` and below | **Signed-in users only** |
 | `src/app/(auth)/login`, `(auth)/signup` | `/login`, `/signup` | Public. Signed-in visitors are redirected by the page (`RedirectIfSignedIn`, database-backed), not by Proxy: straight to `/dashboard`, or `/onboarding` if they have no handle |
-| `src/app/user/[handle]/page.tsx` (planned) | `/user/[handle]` | **Public.** No sign-in needed |
+| `src/app/user/[handle]/page.tsx` | `/user/[handle]` | **Public.** No sign-in needed; unknown handles get a 404 |
 | `src/app/page.tsx` | `/` | Public landing page |
 
 - **Route groups don't add a URL segment.** `src/app/(dashboard)/links/page.tsx` would serve `/links`, not `/dashboard/links`. Put every dashboard page under the real `dashboard/` folder inside the group so it gets the protected **`/dashboard` prefix** that Proxy matches.
@@ -162,9 +162,10 @@ Rules:
 - **No auth check.** Anyone can view the page, signed in or not.
 - Look the profile up by `handle` (indexed, see [`database.md`](database.md) §6). This is the one place a query isn't scoped to the current user's `userId`.
 - **Return only public fields.** Select the fields explicitly or map the result to a public-only object before rendering or passing it to a Client Component. Never send the raw document. Internal IDs, emails and session data must not reach the page.
-- Which fields and links count as public is **TBD**.
+- **Decided public fields:** handle, profile picture URL (`image`), footer setting (`showFooter`) and **active** links (id, title, URL), in the dashboard's order (newest first). **Never** name, email, password hash, inactive links or other ids. Implemented by `getPublicProfile()` (`src/lib/users/public-profile.ts`, query projection) and the pure `toPublicProfile()` mapper. The avatar's initials come from the handle, so the name never reaches the page.
 - A public page must not trigger mutations. Edits happen only in dashboard Server Actions, which follow §5.
-- If it's cached with `"use cache"`, cache only the public-only object, keyed by `handle`.
+- It is cached with `"use cache"` (public-only object, keyed by `handle`, tag `profile:{handle}`). Dashboard and onboarding actions that change what the page shows call `updateTag(profileTag(handle))`.
+- Profile pictures are managed only from the dashboard (Header section) by their owner; see [`security.md`](security.md) §5.1.
 
 ## 8. Caching and sessions
 
@@ -191,5 +192,5 @@ Rules:
 | Email verification, password reset, account deletion, OAuth | TBD (not built) |
 | Session revocation (ending sessions of deleted or changed users) | TBD: known limitation ([`security.md`](security.md) §7.1) |
 | Use of experimental `unauthorized()` / `forbidden()` | TBD |
-| Public profile fields | TBD |
+| Public profile fields | Decided (§7) |
 | Revalidation after mutations | TBD |

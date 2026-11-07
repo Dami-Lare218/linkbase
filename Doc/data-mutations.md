@@ -93,6 +93,8 @@ Revalidate **only after the write succeeds**. Never after validation or ownershi
 
 **Decided (dashboard):** link actions in `src/app/(dashboard)/dashboard/actions.ts` call `refresh()` (`next/cache`, Server Actions only) after a successful write. The dashboard data is uncached, so refreshing the client router re-renders it with the change in the same response. No tags yet. The action's success reply can reach the page a moment before the refreshed list, so the dashboard applies confirmed changes itself until the refreshed data matches (`applyLinkOverrides` in `src/lib/links/display.ts`): `createLinkAction` and `updateLinkAction` return the saved values in `FormState.values`.
 
+**Decided (public profile):** every action above, the profile picture actions (`src/app/(dashboard)/dashboard/profile-picture-actions.ts`) and `claimHandleAction` also call `updateTag(profileTag(handle))` so `/user/[handle]` shows the change on the next request.
+
 **TBD:** tag naming scheme once something is cached (e.g. public profiles), and which mutations invalidate which tags and paths.
 
 ## 6. Typed results
