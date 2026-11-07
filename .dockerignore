@@ -1,0 +1,14 @@
+# Allowlist: ignore everything, then add back only what `next build` needs.
+# This keeps env files, Git history, QA artifacts, plans and local build output out of the image.
+*
+
+!package.json
+!package-lock.json
+!next.config.ts
+!tsconfig.json
+!src/
+!public/
+
+# Never send env files or keys, even if one is ever created inside an allowed folder.
+**/.env*
+**/*.pem

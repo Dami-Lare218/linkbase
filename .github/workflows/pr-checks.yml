@@ -1,0 +1,24 @@
+# Workflow 1: pull requests into main (Doc/deployment.md §3).
+# GitHub Actions runs the quality checks. Vercel's GitHub integration builds the Preview
+# Deployment on its own, in parallel; this workflow doesn't deploy anything.
+#
+# `pull_request` (not `pull_request_target`): PRs from forks get a read-only token and no secrets.
+
+name: PR checks
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push to the same PR cancels the run that's still checking the older commit.
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality
+    uses: ./.github/workflows/quality-checks.yml

@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Standalone output only for the Docker image (the Dockerfile sets this flag at build time).
+  // Vercel and local builds keep the default output (Doc/deployment.md §5).
+  output: process.env.LINKBASE_STANDALONE_BUILD === "1" ? "standalone" : undefined,
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {
