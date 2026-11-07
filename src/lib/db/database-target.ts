@@ -115,3 +115,29 @@ export function resolveDatabaseConfig(env: DatabaseEnv): DatabaseConfig {
 
   return { target: "test", uri, database: test.database };
 }
+
+const MAX_DESCRIPTION_LENGTH = 300;
+
+/**
+ * A one-line, log-safe description of a failed connection: the error's name, its code and
+ * its message, with connection strings, credentials and Atlas host names removed.
+ * For server logs only; the client still gets the generic "Could not connect to MongoDB".
+ */
+export function describeConnectionError(err: unknown): string {
+  if (!(err instanceof Error)) return "UnknownError";
+
+  const fields = err as Error & { code?: unknown; codeName?: unknown };
+  const code = [fields.code, fields.codeName]
+    .filter((part) => typeof part === "string" || typeof part === "number")
+    .join(" ");
+
+  const message = err.message
+    .replace(/mongodb(?:\+srv)?:\/\/\S*/gi, "<connection string>")
+    .replace(/[^\s/@:]+:[^\s/@]*@/g, "<credentials>@")
+    .replace(/[a-z0-9.-]+\.mongodb\.net\b/gi, "<atlas host>")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_DESCRIPTION_LENGTH);
+
+  return `${err.name}${code ? ` (${code})` : ""}${message ? `: ${message}` : ""}`;
+}
