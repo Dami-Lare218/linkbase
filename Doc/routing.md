@@ -54,6 +54,7 @@ src/app/
 | Add-links page under `/dashboard/…` | Signed-in only | Planned. Exact path TBD |
 | `src/app/api/auth/[...nextauth]` | Auth.js endpoints | Exists |
 | `/user/[handle]` public profile | Public | Exists |
+| `/[handle]` short profile URL (rewrite to `/user/[handle]`) | Public | Exists (`next.config.ts`) |
 | Other `src/app/api/…` Route Handlers | Depends on handler | Planned. None decided |
 
 ## 3. Route groups
@@ -79,6 +80,7 @@ Keep one top-level root layout (`src/app/layout.tsx`). Giving each group its own
 ### `/user/[handle]` public profile
 - `src/app/user/[handle]/page.tsx`. `[handle]` is a **dynamic segment**.
 - Type props with `PageProps<"/user/[handle]">`. `params` is a Promise: `const { handle } = await props.params`.
+- **Short URL `/<handle>`:** a `fallback` rewrite in `next.config.ts` serves `/user/<handle>` at `/<handle>` (the address bar keeps the short URL). There is no `src/app/[handle]` folder. `fallback` rewrites run only after every page, file and dynamic route has been checked (bundled docs: `rewrites.md`), so existing and future routes always win over a handle. The source only matches one segment in the handle format (`[A-Za-z0-9_-]{3,30}`, upper case allowed because `getPublicProfile()` lowercases). Every top-level route name must also be in `RESERVED_HANDLES` (`src/lib/validation/handle-rules.ts`), or a user could claim a handle that its route then hides. Verified on a production build: `/maryokafor` and `/MaryOkafor` → 200, unknown handle → 404, `/`, `/login`, `/signup`, `/dashboard`, `/onboarding`, `/api/auth/*`, `/favicon.ico` unchanged.
 - No sign-in required. Show public data only ([`auth.md`](auth.md) §7).
 - For an unknown handle, call `notFound()` (optionally with a `not-found.tsx` in that segment).
 - Handle format is decided: `^[a-z0-9_-]{3,30}$` ([`database.md`](database.md) §5.1). The page loads the profile with `getPublicProfile()` ([`database.md`](database.md) §5.4), which returns `null` for unknown or malformed handles → `notFound()`.

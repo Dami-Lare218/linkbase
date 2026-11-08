@@ -18,6 +18,15 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.public.blob.vercel-storage.com", pathname: "/avatars/**", search: "" },
     ],
   },
+  async rewrites() {
+    return {
+      // Short profile URLs: /maryokafor shows /user/maryokafor (the address bar keeps the short URL).
+      // `fallback` runs only after every page, file and dynamic route has been checked, so real
+      // routes (/, /login, /dashboard, /api/...) always win. Route names are reserved handles
+      // (handle-rules.ts), so nobody can claim one. The pattern matches the handle format.
+      fallback: [{ source: "/:handle([A-Za-z0-9_-]{3,30})", destination: "/user/:handle" }],
+    };
+  },
   turbopack: {
     rules: {
       "*.css": {
