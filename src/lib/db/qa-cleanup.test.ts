@@ -8,7 +8,7 @@ import {
 } from "@/lib/db/qa-cleanup";
 import type { QaCleanupStore } from "@/lib/db/qa-cleanup";
 
-type FakeUser = { id: string; email: string };
+type FakeUser = { id: string; email: string; image?: string };
 type FakeLink = { id: string; userId: string };
 
 /**
@@ -21,10 +21,20 @@ function fakeStore(seed: { users: FakeUser[]; links: FakeLink[]; rateLimits: num
   const calls: string[] = [];
   const ownerExists = (userId: string) => db.users.some((u) => u.id === userId);
 
+  const deletedPictures: string[] = [];
   const store: QaCleanupStore<string> = {
     async findQaUserIds() {
       calls.push("findQaUserIds");
       return db.users.filter((u) => isQaEmail(u.email)).map((u) => u.id);
+    },
+    async findQaPictureUrls(ids) {
+      calls.push("findQaPictureUrls");
+      return db.users.flatMap((u) => (ids.includes(u.id) && u.image ? [u.image] : []));
+    },
+    async deletePictures(urls) {
+      calls.push("deletePictures");
+      deletedPictures.push(...urls);
+      return urls.length;
     },
     async countLinksOwnedBy(ids) {
       calls.push("countLinksOwnedBy");
@@ -64,7 +74,7 @@ function fakeStore(seed: { users: FakeUser[]; links: FakeLink[]; rateLimits: num
       return before - db.users.length;
     },
   };
-  return { store, db, calls };
+  return { store, db, calls, deletedPictures };
 }
 
 // A mixed test database: two QA users, one real user, one orphaned link. Fresh per call.
@@ -87,7 +97,7 @@ function mixedSeed() {
   };
 }
 
-const DELETE_CALLS = ["deleteLinksOwnedBy", "deleteOrphanedLinks", "deleteUsers", "deleteRateLimitRecords"];
+const DELETE_CALLS = ["deletePictures", "deleteLinksOwnedBy", "deleteOrphanedLinks", "deleteUsers", "deleteRateLimitRecords"];
 
 describe("isQaEmail", () => {
   it.each(["qa+20261103t2140-1@linkbase.test", "qa+run-12@linkbase.test", "qa+a@linkbase.test"])("accepts %s", (email) => {
@@ -141,7 +151,7 @@ describe("runQaCleanup: dry run (default)", () => {
 
     expect(report).toEqual({
       dryRun: true,
-      found: { qaUsers: 2, qaLinks: 3, orphanedLinks: null, rateLimitRecords: 4 },
+      found: { qaUsers: 2, qaPictures: 0, qaLinks: 3, orphanedLinks: null, rateLimitRecords: 4 },
       deleted: null,
     });
   });
@@ -173,7 +183,7 @@ describe("runQaCleanup: --confirm", () => {
 
     const report = await runQaCleanup(store, { confirm: true, orphanedLinks: false });
 
-    expect(report.deleted).toEqual({ qaUsers: 2, qaLinks: 3, orphanedLinks: null, rateLimitRecords: 4 });
+    expect(report.deleted).toEqual({ qaUsers: 2, qaPictures: 0, qaLinks: 3, orphanedLinks: null, rateLimitRecords: 4 });
     expect(db.users.map((u) => u.id)).toEqual(["real"]);
     expect(db.rateLimits).toBe(0);
   });
@@ -229,7 +239,7 @@ describe("runQaCleanup: --confirm", () => {
 
     const report = await runQaCleanup(store, { confirm: true, orphanedLinks: false });
 
-    expect(report.deleted).toEqual({ qaUsers: 0, qaLinks: 0, orphanedLinks: null, rateLimitRecords: 2 });
+    expect(report.deleted).toEqual({ qaUsers: 0, qaPictures: 0, qaLinks: 0, orphanedLinks: null, rateLimitRecords: 2 });
     expect(calls).not.toContain("deleteLinksOwnedBy");
     expect(calls).not.toContain("deleteUsers");
     expect(db.users).toHaveLength(1);
@@ -242,36 +252,105 @@ describe("runQaCleanup: --confirm", () => {
 
     const second = await runQaCleanup(store, { confirm: true, orphanedLinks: true });
 
-    expect(second.found).toEqual({ qaUsers: 0, qaLinks: 0, orphanedLinks: 0, rateLimitRecords: 0 });
+    expect(second.found).toEqual({ qaUsers: 0, qaPictures: 0, qaLinks: 0, orphanedLinks: 0, rateLimitRecords: 0 });
   });
 });
 
 describe("formatQaCleanupReport", () => {
   it("prints counts and the dry-run hint", () => {
     const lines = formatQaCleanupReport(
-      { dryRun: true, found: { qaUsers: 2, qaLinks: 3, orphanedLinks: null, rateLimitRecords: 4 }, deleted: null },
+      { dryRun: true, found: { qaUsers: 2, qaPictures: 0, qaLinks: 3, orphanedLinks: null, rateLimitRecords: 4 }, deleted: null },
       "linkbase_test",
     );
 
     expect(lines).toEqual([
-      '[qa] Test database "linkbase_test": 2 QA users, 3 QA links, 4 rate-limit records.',
+      '[qa] Test database "linkbase_test": 2 QA users, 0 QA pictures, 3 QA links, 4 rate-limit records.',
       "[qa] Dry run: nothing deleted. Run `npm run qa:cleanup -- --confirm` to delete them.",
     ]);
   });
 
   it("prints what was deleted, including orphaned links when requested", () => {
-    const counts = { qaUsers: 1, qaLinks: 2, orphanedLinks: 3, rateLimitRecords: 4 };
+    const counts = { qaUsers: 1, qaPictures: 0, qaLinks: 2, orphanedLinks: 3, rateLimitRecords: 4 };
 
     const lines = formatQaCleanupReport({ dryRun: false, found: counts, deleted: counts }, "linkbase_test");
 
-    expect(lines[1]).toBe("[qa] Deleted 1 QA users, 2 QA links, 3 orphaned links, 4 rate-limit records.");
+    expect(lines[1]).toBe("[qa] Deleted 1 QA users, 0 QA pictures, 2 QA links, 3 orphaned links, 4 rate-limit records.");
   });
 
   it("never prints anything that looks like a connection string", () => {
-    const counts = { qaUsers: 0, qaLinks: 0, orphanedLinks: null, rateLimitRecords: 0 };
+    const counts = { qaUsers: 0, qaPictures: 0, qaLinks: 0, orphanedLinks: null, rateLimitRecords: 0 };
 
     const text = formatQaCleanupReport({ dryRun: false, found: counts, deleted: counts }, "linkbase_test").join("\n");
 
     expect(text).not.toMatch(/mongodb(\+srv)?:\/\//);
+  });
+});
+
+describe("runQaCleanup: profile pictures", () => {
+  const QA_PIC = "https://teststore.public.blob.vercel-storage.com/avatars/qa1/a.webp";
+  const REAL_PIC = "https://teststore.public.blob.vercel-storage.com/avatars/real/b.webp";
+
+  function seedWithPictures() {
+    const seed = mixedSeed();
+    return {
+      ...seed,
+      users: seed.users.map((u) =>
+        u.id === "qa1" ? { ...u, image: QA_PIC } : u.id === "real" ? { ...u, image: REAL_PIC } : u,
+      ),
+    };
+  }
+
+  it("counts QA users' pictures in a dry run without deleting them", async () => {
+    const { store, deletedPictures } = fakeStore(seedWithPictures());
+
+    const report = await runQaCleanup(store, { confirm: false, orphanedLinks: false });
+
+    expect(report.found.qaPictures).toBe(1);
+    expect(deletedPictures).toEqual([]);
+  });
+
+  it("deletes only QA users' pictures, never a real user's", async () => {
+    const { store, deletedPictures } = fakeStore(seedWithPictures());
+
+    const report = await runQaCleanup(store, { confirm: true, orphanedLinks: false });
+
+    expect(deletedPictures).toEqual([QA_PIC]);
+    expect(report.deleted?.qaPictures).toBe(1);
+  });
+
+  it("deletes the pictures first, while the users that point to them still exist", async () => {
+    const { store, calls } = fakeStore(seedWithPictures());
+
+    await runQaCleanup(store, { confirm: true, orphanedLinks: false });
+
+    const deletes = calls.filter((c) => DELETE_CALLS.includes(c));
+    expect(deletes[0]).toBe("deletePictures");
+    expect(deletes.indexOf("deletePictures")).toBeLessThan(deletes.indexOf("deleteUsers"));
+  });
+
+  it("doesn't call storage when no QA user has a picture", async () => {
+    const { store, calls } = fakeStore(mixedSeed());
+
+    await runQaCleanup(store, { confirm: true, orphanedLinks: false });
+
+    expect(calls).not.toContain("deletePictures");
+  });
+
+  it("doesn't look for pictures when there are no QA users", async () => {
+    const seed = seedWithPictures();
+    const { store, calls } = fakeStore({ ...seed, users: seed.users.filter((u) => u.id === "real") });
+
+    const report = await runQaCleanup(store, { confirm: true, orphanedLinks: false });
+
+    expect(calls).not.toContain("findQaPictureUrls");
+    expect(report.deleted?.qaPictures).toBe(0);
+  });
+
+  it("reports the picture count", () => {
+    const counts = { qaUsers: 1, qaPictures: 1, qaLinks: 0, orphanedLinks: null, rateLimitRecords: 0 };
+    const text = formatQaCleanupReport({ dryRun: true, found: counts, deleted: null }, "linkbase_test").join("\n");
+
+    expect(text).toContain("1 QA pictures");
+    expect(text).not.toContain("vercel-storage.com");
   });
 });

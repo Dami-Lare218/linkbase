@@ -12,7 +12,7 @@ How Linkbase will store data with **MongoDB + Mongoose**. Read this before addin
 - `MONGODB_URI` holds the development connection string (MongoDB Atlas). It lives in the Git-ignored `.env.local`. `.env.example` (committed) lists it with a placeholder.
 - Models in `src/lib/db/models/`: `user.ts` (`User`), `link.ts` (`Link`) and `auth-attempt.ts` (`AuthAttempt`, rate limiting). All import `server-only`.
 - Link data access in `src/lib/links/links.ts` (`server-only`, §5.3).
-- Handle data access in `src/lib/users/handle.ts` (`server-only`): `isHandleAvailable()`, `claimHandle()` and `findPublicProfileByHandle()` (§5.2).
+- Handle data access in `src/lib/users/handle.ts` (`server-only`): `isHandleAvailable()` and `claimHandle()` (§5.2). Public profile lookup in `src/lib/users/public-profile.ts` (§5.4).
 - Authentication exists ([`auth.md`](auth.md)). The signed-in user's ID is `session.user.id`, a string of the user's `_id`.
 - `mongoose` and `mongodb` are on Next.js's automatic `serverExternalPackages` list, so `next.config.ts` needs no change.
 
@@ -57,7 +57,7 @@ Implemented in `src/lib/db/connect.ts`:
 - The URI comes from `resolveDatabaseConfig(process.env)` (§4.1). Configuration and safety errors (`DatabaseConfigError`) are re-thrown as they are: their messages are safe to show.
 - `mongoose.set("strictQuery", true)` is set once (§5).
 - Connect options: `serverSelectionTimeoutMS: 5000` (fail in 5s, not the 30s default) and `bufferCommands: false` (queries error immediately while disconnected). Pool size and other options use driver defaults.
-- On failure the cached promise is cleared and a generic `Could not connect to MongoDB` error is thrown, with the original error as `cause` for server logs. The connection string never reaches a client.
+- On failure the cached promise is cleared, a **server-only** log line `[db] Could not connect to MongoDB: <name> (<code>): <message>` is written by `describeConnectionError()` (`database-target.ts`, unit-tested) with connection strings, credentials and Atlas host names removed, and a generic `Could not connect to MongoDB` error is thrown, with the original error as `cause`. The connection string never reaches a client or a log. Added 2026-11-07, after a truncated `w=` option and a rotated password both showed only the generic message.
 
 Also guard models against re-registration on hot reload:
 
@@ -113,7 +113,6 @@ Never send a `User` document to the client. Map it to the fields needed (e.g. `{
 | --- | --- |
 | `isHandleAvailable(handle)` | `false` for reserved names (`RESERVED_HANDLES` in `handle-rules.ts`), otherwise `User.exists({ handle }) === null` |
 | `claimHandle(userId, handle)` | `updateOne({ _id: userId, handle: null }, { $set: { handle } }, { runValidators: true })` (`handle: null` matches a missing or null handle). Returns `"claimed"`, `"already-set"` (no matching user without a handle) or `"taken"` (reserved, or duplicate-key error `11000` from the unique index, which also settles two users claiming the same handle at once) |
-| `findPublicProfileByHandle(handle)` | Normalizes, skips the query for impossible values, returns public fields only `{ handle, name }` or `null`. For the planned `/user/[handle]` page; not used yet |
 
 - Pass handles already normalized and validated (`handleSchema`), and `userId` from the session only.
 - Existing users without a handle need no migration: the partial index ignores them, and they're sent to onboarding on their next visit.
@@ -134,6 +133,12 @@ Never send a `User` document to the client. Map it to the fields needed (e.g. `{
 - **Index:** `{ userId: 1, createdAt: -1 }` (the dashboard lists a user's links newest first).
 - **`User.showFooter`:** Boolean, default `true` (missing on older users counts as `true`). Controls the "Join … on Linkbase" footer.
 - **Data access** (`src/lib/links/links.ts`): `getDashboardData(userId)` (links + footer setting, as plain objects with string ids), `createLink`, `updateLink`, `deleteLink`, `setLinkActive`, `setShowFooter`. Every write puts `{ _id: id, userId }` in the filter; a match/delete count of 0 is reported as `"not-found"`.
+
+### 5.4 Profile pictures and the public profile
+
+- **`User.image`:** optional String, the URL of a processed WebP in **Vercel Blob** (validator `isBlobAvatarUrl`: `https://<store>.public.blob.vercel-storage.com/avatars/…`). Image bytes are never stored in MongoDB.
+- Files live at `avatars/{userId}/{uuid}.webp` (`src/lib/storage/avatar-storage.ts`). Replacing or removing a picture deletes the previous file (best-effort).
+- **`getPublicProfile(handle)`** (`src/lib/users/public-profile.ts`, `server-only`, `"use cache"`): selects `handle image showFooter` from the user and `title url isActive` from **active** links sorted `createdAt: -1`, then maps them with the pure `toPublicProfile()` (`public-profile-mapping.ts`). Returns `null` for unknown or malformed handles. It replaces the earlier `findPublicProfileByHandle`.
 
 **TBD:** further collections and their fields.
 

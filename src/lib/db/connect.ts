@@ -2,7 +2,12 @@ import "server-only";
 
 import mongoose from "mongoose";
 
-import { assertTestDatabaseName, DatabaseConfigError, resolveDatabaseConfig } from "./database-target";
+import {
+  assertTestDatabaseName,
+  DatabaseConfigError,
+  describeConnectionError,
+  resolveDatabaseConfig,
+} from "./database-target";
 import type { DatabaseConfig } from "./database-target";
 
 type MongooseCache = {
@@ -45,6 +50,9 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
     cached.promise = null;
     // Safety refusals are already safe to show and must stay visible.
     if (err instanceof DatabaseConfigError) throw err;
+    // Server log only, with the connection string, credentials and host removed, so the
+    // real cause (bad URI option, failed login, network) is visible without a manual check.
+    console.error(`[db] Could not connect to MongoDB: ${describeConnectionError(err)}`);
     // Generic message so the connection string never reaches a client; details stay in `cause`.
     throw new Error("Could not connect to MongoDB", { cause: err });
   }

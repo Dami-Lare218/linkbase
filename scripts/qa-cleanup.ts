@@ -2,22 +2,25 @@
  * `npm run qa:cleanup`: removes data created by QA runs, only from a verified test database.
  *
  * - Dry run by default: prints counts only. `npm run qa:cleanup -- --confirm` deletes.
- * - Deletes only users with QA emails (`qa+<run>-<n>@linkbase.test`), the links those users own
- *   (first, so no link is left without an owner), and the test database's rate-limit records
+ * - Deletes only users with QA emails (`qa+<run>-<n>@linkbase.test`), their profile pictures in the
+ *   **test** Blob store and the links they own (first, so nothing is left without an owner), and the
+ *   test database's rate-limit records
  *   (`authattempts`), so repeated QA runs don't hit sign-up limits.
  * - `--orphaned-links` also handles links whose owner no longer exists (left by clean-ups before
  *   links were handled). Real users' links always have an existing owner, so they never match.
  * - Never drops collections or databases. Checks the database name before and after connecting.
  * - The rules live in `src/lib/db/qa-cleanup.ts` (unit-tested); this file only connects.
  */
+import { del } from "@vercel/blob";
 import mongoose from "mongoose";
 import type { ObjectId } from "mongodb";
 
 import { assertTestDatabaseName } from "../src/lib/db/database-target.ts";
 import { formatQaCleanupReport, parseQaCleanupArgs, QA_EMAIL_PATTERN, runQaCleanup } from "../src/lib/db/qa-cleanup.ts";
 import type { QaCleanupStore } from "../src/lib/db/qa-cleanup.ts";
+import { isBlobAvatarUrl } from "../src/lib/validation/profile-picture.ts";
 
-import { loadQaDatabase, reportSafeError } from "./qa-env.ts";
+import { loadQaBlobToken, loadQaDatabase, reportSafeError } from "./qa-env.ts";
 import type { QaDatabase } from "./qa-env.ts";
 
 const options = parseQaCleanupArgs(process.argv.slice(2));
@@ -53,6 +56,18 @@ try {
     async findQaUserIds() {
       const found = await users.find({ email: { $regex: QA_EMAIL_PATTERN } }, { projection: { _id: 1 } }).toArray();
       return found.map((user) => user._id);
+    },
+    async findQaPictureUrls(userIds) {
+      const found = await users
+        .find({ _id: { $in: userIds }, image: { $type: "string" } }, { projection: { image: 1 } })
+        .toArray();
+      // Only Blob avatar URLs: anything else is never sent to the storage API.
+      return found.map((user) => user.image).filter(isBlobAvatarUrl);
+    },
+    async deletePictures(urls) {
+      // The test store's token only (refuses if it's missing or equals the dev token).
+      await del(urls, { token: loadQaBlobToken() });
+      return urls.length;
     },
     countLinksOwnedBy: (userIds) => links.countDocuments({ userId: { $in: userIds } }),
     async deleteLinksOwnedBy(userIds) {

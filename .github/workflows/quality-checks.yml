@@ -1,0 +1,92 @@
+# Reusable quality checks, shared by pr-checks.yml (pull requests into main) and
+# main-checks.yml (pushes to main). See Doc/deployment.md §8.
+#
+# CI only verifies. Vercel's GitHub integration builds and deploys (Doc/deployment.md §2.2).
+# No secrets are used: unit tests, the build and the Docker smoke test never touch a database,
+# Blob store or real auth secret, so CI can't reach development, test or production data.
+
+name: Quality checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  # Keep in step with NODE_VERSION in the Dockerfile.
+  NODE_VERSION: "24"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  checks:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out code
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        # actions/setup-node v7.1.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies (npm ci)
+        id: install
+        run: npm ci --no-audit --no-fund
+
+      # The four checks below run even if an earlier one fails, so one run reports every failure.
+      # The job still fails if any of them fails.
+      - name: Lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint
+
+      - name: Typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run typecheck
+
+      - name: Unit tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run test
+
+      - name: Production build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run build
+
+  docker:
+    name: Docker image build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out code
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: docker build --tag linkbase:ci .
+
+      - name: Start container and check the home page
+        run: |
+          docker run --detach --name linkbase-ci --publish 3000:3000 linkbase:ci
+          for _ in $(seq 1 30); do
+            if curl --silent --fail --output /dev/null http://127.0.0.1:3000/; then
+              echo "Home page answered with a 2xx status."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::The container did not serve the home page within 60 seconds."
+          docker logs linkbase-ci
+          exit 1
+
+      - name: Stop container
+        if: ${{ always() }}
+        run: docker rm --force linkbase-ci || true

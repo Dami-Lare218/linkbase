@@ -12,7 +12,7 @@ How Linkbase uses branches, commits and pull requests. Read this before creating
 | Default branch | `main`, tracking `origin/main` |
 | Branch protection / required reviews on `main` | **Unverified.** Can't be checked from the local repo |
 | Allowed merge methods on GitHub | **Unverified** |
-| CI workflows (`.github/`) | None |
+| CI workflows (`.github/`) | **Exist:** `pr-checks.yml` (PRs into `main`) and `main-checks.yml` (pushes to `main`), both calling `quality-checks.yml`. Not yet run on GitHub ([`deployment.md`](deployment.md) §8) |
 | Git hooks (Husky, lint-staged, commitlint, custom hooks) | None |
 | Commit message linting | None. The format below is followed by hand |
 
@@ -82,7 +82,7 @@ Note: `next dev` re-adds a managed block to `AGENTS.md` if it's removed. Commit 
 - The PR description says what changed, why, and how it was checked (e.g. `npm run lint`, `npm run build`). PRs opened by Claude Code end with the attribution line it's configured to add.
 - Before opening: branch is up to date with `main`, and lint and build pass locally.
 
-**TBD:** merge strategy (merge commit, squash or rebase), PR template, required checks.
+**TBD:** merge strategy (merge commit, squash or rebase), PR template. Required checks: `Quality / Lint, typecheck, test, build` and `Quality / Docker image build`, to be set in branch protection ([`deployment.md`](deployment.md) §10.2).
 
 ## 6. Review and merging
 
@@ -98,7 +98,7 @@ Note: `next dev` re-adds a managed block to `AGENTS.md` if it's removed. Commit 
 | Branch protection on `main` (block direct pushes, require PR) | TBD / unverified |
 | Required approving reviews | TBD / unverified |
 | Merge strategy and allowed merge methods | TBD |
-| Required status checks / CI | TBD (no CI exists) |
+| Required status checks / CI | CI exists ([`deployment.md`](deployment.md) §8); making its checks required on `main` is a manual GitHub step, not done yet |
 | Commit message linting or hooks | TBD (none exist) |
 | PR template | TBD |
 | Commit scopes and breaking-change markers | TBD |

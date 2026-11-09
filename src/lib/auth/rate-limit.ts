@@ -18,6 +18,8 @@ export const RATE_LIMITS = {
   handleClaim: { limit: 10, windowMs: 15 * MINUTE },
   // Dashboard, keyed by user id.
   linkCreate: { limit: 30, windowMs: 10 * MINUTE },
+  // Profile picture uploads, keyed by user id (each one is processed with sharp and stored).
+  avatarUpload: { limit: 10, windowMs: 60 * MINUTE },
 } as const;
 
 type RateLimitName = keyof typeof RATE_LIMITS;

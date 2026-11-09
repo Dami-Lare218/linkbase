@@ -15,6 +15,8 @@ type IconButtonProps = {
   onClick?: () => void;
   /** Renders a link instead of a button. */
   href?: string;
+  /** With `href`: open in a new tab (`rel="noopener noreferrer"`). */
+  newTab?: boolean;
   className?: string;
 };
 
@@ -41,6 +43,7 @@ export function IconButton({
   disabled = false,
   onClick,
   href,
+  newTab = false,
   className = "",
 }: IconButtonProps) {
   const s = sizes[size];
@@ -53,6 +56,14 @@ export function IconButton({
       : variants[variant],
     className,
   ].join(" ");
+
+  if (href && !disabled && newTab) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`${label} (opens in a new tab)`} title={label} className={classes}>
+        <Icon size={s.icon} aria-hidden />
+      </a>
+    );
+  }
 
   if (href && !disabled) {
     return (

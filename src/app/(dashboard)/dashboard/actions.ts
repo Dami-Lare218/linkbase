@@ -1,6 +1,6 @@
 "use server";
 
-import { refresh } from "next/cache";
+import { refresh, updateTag } from "next/cache";
 import { z } from "zod";
 
 import { consumeRateLimit } from "@/lib/auth/rate-limit";
@@ -9,6 +9,7 @@ import type { CurrentUser } from "@/lib/auth/session";
 import { connectToDatabase } from "@/lib/db/connect";
 import { createLink, deleteLink, setLinkActive, setShowFooter, updateLink } from "@/lib/links/links";
 import type { FormState } from "@/lib/types/action-result";
+import { profileTag } from "@/lib/users/public-profile";
 import {
   createLinkSchema,
   deleteLinkSchema,
@@ -36,6 +37,12 @@ async function authenticate(): Promise<Auth> {
   return { user };
 }
 
+/** Refreshes the dashboard and expires the user's cached public profile. */
+function refreshAfterWrite(user: CurrentUser): void {
+  if (user.handle) updateTag(profileTag(user.handle));
+  refresh();
+}
+
 function readString(formData: FormData, field: string): string {
   const value = formData.get(field);
   return typeof value === "string" ? value : "";
@@ -61,7 +68,7 @@ export async function createLinkAction(_prev: LinkFormState, formData: FormData)
   }
 
   const link = await createLink(auth.user.id, parsed.data);
-  refresh();
+  refreshAfterWrite(auth.user);
   // The new link's id and saved values, so the list can show it before the refreshed data arrives.
   return { ok: true, message: "Link added", values: { id: link.id, title: link.title, url: link.url } };
 }
@@ -87,7 +94,7 @@ export async function updateLinkAction(_prev: LinkFormState, formData: FormData)
     return { ok: false, message: LINK_MESSAGES.notFound, values };
   }
 
-  refresh();
+  refreshAfterWrite(auth.user);
   // The saved (trimmed) values, so the row can show them before the refreshed list arrives.
   return { ok: true, message: "Link updated", values: { title, url } };
 }
@@ -104,7 +111,7 @@ export async function deleteLinkAction(_prev: LinkFormState, formData: FormData)
     return { ok: false, message: LINK_MESSAGES.notFound };
   }
 
-  refresh();
+  refreshAfterWrite(auth.user);
   return { ok: true, message: "Link deleted" };
 }
 
@@ -121,7 +128,7 @@ export async function setLinkActiveAction(id: unknown, isActive: unknown): Promi
     return { ok: false, message: LINK_MESSAGES.notFound };
   }
 
-  refresh();
+  refreshAfterWrite(auth.user);
   return { ok: true };
 }
 
@@ -134,6 +141,6 @@ export async function setFooterAction(showFooter: unknown): Promise<FormState<ne
   if (!parsed.success) return { ok: false, message: "Something went wrong. Try again." };
 
   await setShowFooter(auth.user.id, parsed.data.showFooter);
-  refresh();
+  refreshAfterWrite(auth.user);
   return { ok: true };
 }

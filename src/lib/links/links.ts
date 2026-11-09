@@ -4,6 +4,7 @@ import { connectToDatabase } from "@/lib/db/connect";
 import { Link } from "@/lib/db/models/link";
 import { User } from "@/lib/db/models/user";
 import type { CreateLinkInput } from "@/lib/validation/link";
+import { isBlobAvatarUrl } from "@/lib/validation/profile-picture";
 
 import type { DashboardLink } from "./display";
 
@@ -18,14 +19,16 @@ export type LinkWriteResult = "ok" | "not-found";
 export type DashboardData = {
   links: DashboardLink[];
   showFooter: boolean;
+  /** Profile picture URL, or null. */
+  image: string | null;
 };
 
-/** The user's links (newest first) and footer setting, as plain objects. */
+/** The user's links (newest first), footer setting and picture URL, as plain objects. */
 export async function getDashboardData(userId: string): Promise<DashboardData> {
   await connectToDatabase();
   const [links, user] = await Promise.all([
     Link.find({ userId }).sort({ createdAt: -1 }).select("title url isActive clicks").lean(),
-    User.findById(userId).select("showFooter").lean(),
+    User.findById(userId).select("showFooter image").lean(),
   ]);
 
   return {
@@ -37,6 +40,7 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
       clicks: link.clicks,
     })),
     showFooter: user?.showFooter ?? true,
+    image: isBlobAvatarUrl(user?.image) ? user.image : null,
   };
 }
 

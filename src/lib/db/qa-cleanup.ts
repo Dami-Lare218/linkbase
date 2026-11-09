@@ -3,7 +3,7 @@
  *
  * Pure on purpose: no imports, no database access. The script supplies a `QaCleanupStore`
  * backed by the verified test database; unit tests supply an in-memory one. That keeps the
- * safety rules (dry run by default, QA-owned data only, links before users) testable without
+ * safety rules (dry run by default, QA-owned data only, pictures and links before users) testable without
  * a database. The database-target checks stay in `database-target.ts` and the script.
  */
 
@@ -30,6 +30,10 @@ export function parseQaCleanupArgs(argv: readonly string[]): QaCleanupOptions {
 export type QaCleanupStore<Id> = {
   /** Ids of users whose email matches `QA_EMAIL_PATTERN`. */
   findQaUserIds(): Promise<Id[]>;
+  /** Profile picture URLs stored on those users (Vercel Blob, test store). */
+  findQaPictureUrls(userIds: Id[]): Promise<string[]>;
+  /** Deletes the given picture files from storage; returns how many were deleted. */
+  deletePictures(urls: string[]): Promise<number>;
   countLinksOwnedBy(userIds: Id[]): Promise<number>;
   deleteLinksOwnedBy(userIds: Id[]): Promise<number>;
   /** Links whose `userId` matches no existing user. */
@@ -42,6 +46,7 @@ export type QaCleanupStore<Id> = {
 
 export type QaCleanupCounts = {
   qaUsers: number;
+  qaPictures: number;
   qaLinks: number;
   /** Null when orphaned links weren't requested. */
   orphanedLinks: number | null;
@@ -56,14 +61,16 @@ export type QaCleanupReport = {
 };
 
 /**
- * Counts QA data, then (only with `confirm`) deletes it: links owned by QA users first, so no
- * link is left without an owner, then orphaned links (only if requested), then the QA users,
- * then the test database's rate-limit records.
+ * Counts QA data, then (only with `confirm`) deletes it: QA users' profile pictures and links
+ * first, so nothing is left without an owner, then orphaned links (only if requested), then the
+ * QA users, then the test database's rate-limit records.
  */
 export async function runQaCleanup<Id>(store: QaCleanupStore<Id>, options: QaCleanupOptions): Promise<QaCleanupReport> {
   const qaUserIds = await store.findQaUserIds();
+  const pictureUrls = qaUserIds.length > 0 ? await store.findQaPictureUrls(qaUserIds) : [];
   const found: QaCleanupCounts = {
     qaUsers: qaUserIds.length,
+    qaPictures: pictureUrls.length,
     qaLinks: qaUserIds.length > 0 ? await store.countLinksOwnedBy(qaUserIds) : 0,
     orphanedLinks: options.orphanedLinks ? await store.countOrphanedLinks() : null,
     rateLimitRecords: await store.countRateLimitRecords(),
@@ -71,17 +78,19 @@ export async function runQaCleanup<Id>(store: QaCleanupStore<Id>, options: QaCle
 
   if (!options.confirm) return { dryRun: true, found, deleted: null };
 
+  const qaPictures = pictureUrls.length > 0 ? await store.deletePictures(pictureUrls) : 0;
   const qaLinks = qaUserIds.length > 0 ? await store.deleteLinksOwnedBy(qaUserIds) : 0;
   const orphanedLinks = options.orphanedLinks ? await store.deleteOrphanedLinks() : null;
   const qaUsers = qaUserIds.length > 0 ? await store.deleteUsers(qaUserIds) : 0;
   const rateLimitRecords = await store.deleteRateLimitRecords();
 
-  return { dryRun: false, found, deleted: { qaUsers, qaLinks, orphanedLinks, rateLimitRecords } };
+  return { dryRun: false, found, deleted: { qaUsers, qaPictures, qaLinks, orphanedLinks, rateLimitRecords } };
 }
 
 function describe(counts: QaCleanupCounts): string {
   const parts = [
     `${counts.qaUsers} QA users`,
+    `${counts.qaPictures} QA pictures`,
     `${counts.qaLinks} QA links`,
     ...(counts.orphanedLinks === null ? [] : [`${counts.orphanedLinks} orphaned links`]),
     `${counts.rateLimitRecords} rate-limit records`,

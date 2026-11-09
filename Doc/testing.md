@@ -10,7 +10,7 @@ How Linkbase is tested: Vitest unit tests for pure logic, and Playwright MCP-dri
 | --- | --- |
 | **Vitest** | **Installed and configured:** `vitest` 4.1.12 (dev dependency), config in `vitest.config.mts` (§2) |
 | `test` script in `package.json` | `npm run test` → `vitest run` (runs once, no watch mode) |
-| Test files | `src/lib/validation/auth.test.ts`: 39 unit tests for `signUpSchema` and `logInSchema`, all passing. Unit tests only, no MongoDB or other database access. No `*.spec.ts` files |
+| Test files | 518 tests in 14 `*.test.ts` files beside the code they test (§2), all passing. No MongoDB or other database access; the only mocked tests are listed in §2.1. No `*.spec.ts` files |
 | **Playwright MCP** | **Available to Claude Code** as a user-level plugin (`playwright@claude-plugins-official`). Not configured in this repo: no `.mcp.json`, and nothing in `.claude/settings.json`. Used by the `run-qa-suite` skill |
 | **`write-tests` skill** | **Exists** in `.claude/skills/write-tests/`. Writes Vitest unit tests following this doc; doesn't run them, run QA or commit |
 | **`run-qa-suite` skill** | **Exists** in `.claude/skills/run-qa-suite/`. Drives the plan's QA Scenarios through the Playwright MCP against the test database (§3) |
@@ -18,6 +18,7 @@ How Linkbase is tested: Vitest unit tests for pure logic, and Playwright MCP-dri
 | Test-database checks | `src/lib/db/database-target.ts`, used by `connect.ts` and the QA scripts (§4) |
 | `.env.test` | **You create it** (one line: `MONGODB_URI_TEST=…`). Git-ignored by the `.env*` rule, and Claude Code's env-file hook blocks edits to it |
 | `MONGODB_URI_TEST` | Read only in test mode (`LINKBASE_DB_TARGET=test`, set by `qa:server`) and by `qa:cleanup`. Placeholder in `.env.example` |
+| `BLOB_READ_WRITE_TOKEN_TEST` | Token of a **separate** Vercel Blob store for QA, in `.env.test`. `qa:server` passes it to the app as `BLOB_READ_WRITE_TOKEN`; `qa:cleanup` uses it to delete QA pictures. Both refuse if it's missing or equal to the dev token. Placeholder in `.env.example` |
 | Test database | **Exists and verified:** a separate MongoDB Atlas database, `linkbase_test`, reached through `MONGODB_URI_TEST` in `.env.test` (§4). Used by the QA run on 2026-11-03 (§7) |
 | Zod | Installed (Zod 4), schemas in `src/lib/validation/` ([`errors-and-validation.md`](errors-and-validation.md)) |
 
@@ -34,7 +35,7 @@ How Linkbase is tested: Vitest unit tests for pure logic, and Playwright MCP-dri
 
 - **Independent:** each test sets up its own data. No shared mutable state between tests, no reliance on run order. Reset anything a test changes (e.g. mocks, timers) in that test or in `beforeEach` / `afterEach`.
 - **Schemas:** test both valid and invalid input, and check the field-level errors the forms will display ([`errors-and-validation.md`](errors-and-validation.md) §4).
-- **Don't unit-test Server Actions by mocking** auth, the database or Next.js. They're covered by QA (§3).
+- **Don't unit-test Server Actions by mocking** auth, the database or Next.js. They're covered by QA (§3). The one exception is §2.1.
 - Follow [`coding-standards.md`](coding-standards.md) (TypeScript strict, no `any`, `async`/`await`).
 
 ### Setup (decided)
@@ -46,9 +47,22 @@ How Linkbase is tested: Vitest unit tests for pure logic, and Playwright MCP-dri
   - `resolve.tsconfigPaths: true`: Vite 8's built-in tsconfig path resolution, so `@/*` → `src/*` works in tests exactly as in app code. No `vite-tsconfig-paths` plugin.
 - **Run:** `npm run test` (`vitest run`). It runs once and exits.
 - **Unit tests never touch MongoDB.** Nothing a unit test imports may call `connectToDatabase()`, read `process.env`, or use Mongoose models. Database behaviour is covered by QA (§3, §4).
-- **Existing tests (286 in 8 files):** `src/lib/db/qa-cleanup.test.ts` (35) covers the QA clean-up rules (§5). `src/lib/validation/link.test.ts` (87) covers `isHttpUrl` (accepted http/https URLs; rejected `javascript:`, `data:`, `vbscript:`, `file:`, `ftp:`, `mailto:`, no scheme, protocol-relative, whitespace; the 2048/2049 boundary), title rules (trim, 1/100/101, empty), URL messages, id format (including injection-style values), and the create/update/delete/active/footer schemas (field errors, unknown fields such as `userId` dropped, booleans only). `src/lib/links/display.test.ts` (40) covers domains, click labels, live-link filtering (inactive and unsafe URLs hidden) and `applyLinkOverrides` (confirmed adds, deletes, edits and toggles). Data functions and Server Actions touch MongoDB and Next.js, so they are covered by browser QA, not unit tests (§2). `src/lib/onboarding/handle-field-state.test.ts` covers every state of the onboarding handle field (format errors, checking, available, taken, rate limited, failed check, stale replies, rejected claims); `src/lib/auth/home-path.test.ts` covers where signed-in users are sent. `src/lib/validation/handle-rules.test.ts` and `handle.test.ts` cover handle normalization, valid handles, invalid characters (spaces, periods, symbols, uppercase, accents, emoji), length boundaries 2/3/30/31, reserved names, non-string input and the field-level messages; duplicate handles are database behaviour and are covered by QA. `src/lib/validation/auth.test.ts` covers valid input, normalisation (trimming, lowercased email, passwords kept as typed, unknown fields dropped), the first field-level message each form shows, and length limits (including the 72-byte password limit).
+- **Existing tests (518 in 14 files):** `src/lib/db/database-target.test.ts` (30, 2026-11-07) covers the test-database safety checks (§4: `_test` names, same-database refusal, production refusal, no values in errors) and the log-safe connection error description. Public profile (2026-11-04): `src/lib/validation/profile-picture.test.ts` (type, size, byte signatures, Blob URL check), `src/lib/users/public-profile-mapping.test.ts` (public fields only, link order, unsafe links dropped, handles that 404 without a lookup), `src/lib/storage/blob-token.test.ts`, picture cases in `qa-cleanup.test.ts`, and the mocked tests in §2.1. Earlier: `src/lib/db/qa-cleanup.test.ts` (35) covers the QA clean-up rules (§5). `src/lib/validation/link.test.ts` (87) covers `isHttpUrl` (accepted http/https URLs; rejected `javascript:`, `data:`, `vbscript:`, `file:`, `ftp:`, `mailto:`, no scheme, protocol-relative, whitespace; the 2048/2049 boundary), title rules (trim, 1/100/101, empty), URL messages, id format (including injection-style values), and the create/update/delete/active/footer schemas (field errors, unknown fields such as `userId` dropped, booleans only). `src/lib/links/display.test.ts` (40) covers domains, click labels, live-link filtering (inactive and unsafe URLs hidden) and `applyLinkOverrides` (confirmed adds, deletes, edits and toggles). Data functions and Server Actions touch MongoDB and Next.js, so they are covered by browser QA, not unit tests (§2). `src/lib/onboarding/handle-field-state.test.ts` covers every state of the onboarding handle field (format errors, checking, available, taken, rate limited, failed check, stale replies, rejected claims); `src/lib/auth/home-path.test.ts` covers where signed-in users are sent. `src/lib/validation/handle-rules.test.ts` and `handle.test.ts` cover handle normalization, valid handles, invalid characters (spaces, periods, symbols, uppercase, accents, emoji), length boundaries 2/3/30/31, reserved names, non-string input and the field-level messages; duplicate handles are database behaviour and are covered by QA. `src/lib/validation/auth.test.ts` covers valid input, normalisation (trimming, lowercased email, passwords kept as typed, unknown fields dropped), the first field-level message each form shows, and length limits (including the 72-byte password limit).
 
 **TBD:** coverage tooling and thresholds, and whether CI runs the tests (no CI exists).
+
+### 2.1 Mocked profile picture and Blob tests (exception, decided 2026-11-04)
+
+Real uploads need Vercel Blob credentials, which come with the course's Vercel lesson. Until then, browser QA can't reach a successful upload, replace or remove, so these two files test that logic with **mocks**. They are the only tests that mock modules or stub env vars; don't extend the pattern to other actions without a reason like this one.
+
+| File | Real | Mocked |
+| --- | --- | --- |
+| `src/lib/storage/avatar-storage.test.ts` (24) | `sharp` image processing (512×512 WebP, EXIF dropped, malformed/truncated/text files and a 10,000×10,000 header rejected); the token check | `put` / `del` from `@vercel/blob`; `BLOB_READ_WRITE_TOKEN` stubbed with a made-up, token-shaped value |
+| `src/app/(dashboard)/dashboard/profile-picture-actions.test.ts` (31) | Validation rules (`profile-picture.ts`): declared type, 2 MB limit, real bytes | Session, rate limit, database (`User`), `next/cache`, and `processAvatar` / `storeAvatar` / `deleteAvatar` |
+
+What they cover: successful upload (path `avatars/<userId>/<uuid>.webp`, public WebP, token passed explicitly even when OIDC variables exist); replace (old file deleted only after the new URL is saved); remove (URL read from the user's own record, never from the client); clean-up when saving the URL fails or the account is gone (the new file is deleted); Blob failures and missing or invalid tokens (friendly message, nothing saved, logs show the error name only); signed-out and no-handle requests refused before any database or storage call; user ids and URLs sent with the form ignored; invalid types, malformed, empty and oversized files; the rate limit keyed by the session user.
+
+**Not covered by any test yet (needs Vercel):** a real `put` / `del` against a Blob store, the stored image appearing on the dashboard and `/user/[handle]` through `next/image`, the old file really disappearing from the store, and `qa:cleanup` deleting real QA pictures. See §7, "Pending: real Vercel Blob".
 
 ## 3. End-to-end QA: Playwright MCP
 
@@ -79,6 +93,7 @@ QA lives in the skill and MCP sessions, not in a Playwright test-runner setup.
 
 - QA runs against a **separate test database**, never the development or production database.
 - The test connection string lives in **`MONGODB_URI_TEST`**, in **`.env.test`**.
+- It uses **its own Atlas database user** (e.g. `linkbase_qa`) with `readWrite` on `linkbase_test` only, never the dev user (`linkbase_dev`, `linkbase` only). **State on 2026-11-07:** `.env.test` still holds the old shared user, whose login fails (`bad auth`), so QA is blocked until the user creates the QA user and updates `.env.test` ([`deployment.md`](deployment.md) §10.3).
 - **Never commit `.env.test` with real credentials.** The Next.js docs suggest committing `.env.test`, but in Linkbase it holds a database credential, so it stays Git-ignored (the current `.env*` rule already does this). If it's ever documented for others, use placeholder values only, as with `.env.example` ([`security.md`](security.md) §2).
 - **Never print, log or paste** the value of `MONGODB_URI_TEST` or any other connection string, including in QA output, screenshots or chat.
 
@@ -129,6 +144,7 @@ Always stop the QA server with **`npm run qa:stop`** (`scripts/qa-stop.ts`). In 
 - **Clean-up (decided): `npm run qa:cleanup`** (`scripts/qa-cleanup.ts`). It runs the §4 checks before and after connecting.
   - **Dry run by default:** prints counts only.
   - **`npm run qa:cleanup -- --confirm`** deletes, in this order: the **links owned by QA users** (`qa+…@linkbase.test`, matched by `QA_EMAIL_PATTERN`), the QA users themselves (by id snapshot *and* QA email), and the test database's `authattempts` (rate-limit records). Clearing those lets repeated QA runs stay under the sign-up limit (5 per hour per IP). Real users and their links are never matched.
+  - **Profile pictures:** with `--confirm`, QA users' pictures are deleted from the **test Blob store** first (only URLs that pass `isBlobAvatarUrl`, using `BLOB_READ_WRITE_TOKEN_TEST`). The report adds "N QA pictures".
   - **`--orphaned-links`** (opt-in, with or without `--confirm`) also counts/deletes links whose owner no longer exists in the test database, e.g. left by clean-ups from before links were handled. A real user's link always has an existing owner, so it can't match.
   - The rules live in `src/lib/db/qa-cleanup.ts` (pure, no database). `scripts/qa-cleanup.ts` keeps the safety checks (`loadQaDatabase()` before connecting, `assertTestDatabaseName()` after) and only supplies the MongoDB operations. `src/lib/db/qa-cleanup.test.ts` (35 tests) covers the QA email rule, argument parsing, dry-run protection (no delete calls, nothing changed), ownership isolation (real users' links untouched), links-before-users order, orphaned links only on request, and output without connection strings.
   - It never drops collections or databases, and never touches other users.
@@ -244,3 +260,26 @@ After the clean-up and review fixes, all six scenarios were run again on `linkba
 - The Links tab now controls a `role="tabpanel"` (`aria-controls`/`aria-labelledby`).
 
 **Final state:** 0 QA users, 0 QA links, 0 orphaned links, 0 rate-limit records in `linkbase_test`; QA server stopped; ports 3000 and 3100 free. Unit tests 286/286, lint, `tsc --noEmit` and `npm run build` pass.
+
+### Public profile: passed on 2026-11-04 except real uploads (run `20261104t1250`)
+
+Unit tests 433/433 (new: `profile-picture.test.ts`, `public-profile-mapping.test.ts`, `blob-token.test.ts`, picture cases in `qa-cleanup.test.ts`). Browser QA on `linkbase_test` with `npm run qa:server -- --no-uploads`, because `BLOB_READ_WRITE_TOKEN_TEST` is not set yet. `qa:server` without the flag still refuses, as intended.
+
+- **Passed:** signed-out profile (handle, initials, active links only, newest first, `target="_blank"` + `rel="noopener noreferrer"`, no name/email/inactive link in the HTML); Share toast and clipboard; claim overlay dismiss; Explore Linkbase; 404 status for unknown valid handles (`qa1250two`, `no-such-handle`) and malformed ones (`A!`, `ab`, `%20`, 31 chars, `..%2Fdashboard`, `%3Cscript%3E`); link edit / switch off / delete and footer off reflected on reload; a cached 404 cleared when the handle is claimed; picture checks in the browser (GIF, SVG, > 2 MB, empty) and on the server with the browser checks bypassed (GIF, GIF named `.png`, text named `.png`, 2 MB + 1 byte, corrupt JPEG, 3 MB over the body limit); storage failure message; signed-out action calls refused; 390 / 834 / 1440 px layouts; auth and dashboard regressions.
+- **Not tested:** a successful upload, replace and remove (needs the test Blob store token).
+- **Fixed during QA:** explicit Blob token (OIDC precedence); friendly message for storage failures and rejected requests (the dashboard used to switch to the error page); `instant = false` on the profile page (dev-only validation errors); the phone preview now uses handle initials like the public page.
+
+### Public profile: final verification on 2026-11-04 (run `20261104t1436` and follow-up)
+
+- **Passed (browser, `linkbase_test`, `npm run qa:server -- --no-uploads`):** `/dashboard` loads with no runtime or dev-overlay error; a 3 MB upload with the browser checks bypassed is rejected by Next.js ("Body exceeded 2.2mb limit", before the action runs) and the panel shows a message instead of crashing; browser checks for GIF, SVG and > 2 MB; server checks (browser bypassed) for text named `.png`, 2 MB of GIF bytes named `.png`, SVG type and an empty file; storage-failure message for a valid JPEG; signed-out upload and remove refused (`/dashboard` → `/login?callbackUrl=%2Fdashboard`; on public routes the action never runs); `/user/<handle>` 200 without name or email; unknown valid and malformed handles 404.
+- **Passed (unit, mocked where §2.1 says):** 488/488 in 13 files, including the 55 mocked tests in §2.1. Lint, `tsc --noEmit` and `npm run build` pass.
+- **Fixed:** an old upload error no longer shows beside a newer one or comes back after Cancel; the remove dialog shows "Couldn't remove your picture right now…" instead of crashing the dashboard when the request fails; a failed database save after a successful Blob upload deletes the new file (no orphan); the claim overlay's close button is labelled "Dismiss the Linkbase sign-up banner".
+- **Clean-up:** 0 QA users, 0 QA pictures, 0 QA links, 0 orphaned links, 0 rate-limit records; QA server stopped; ports 3000 and 3100 free.
+
+### Pending: real Vercel Blob (not passed, needs credentials)
+
+These are **not verified** and must not be read as passed. They need a Vercel account and two Blob stores, which the course covers in its Vercel lesson:
+
+1. Add `BLOB_READ_WRITE_TOKEN` to `.env.local` and `BLOB_READ_WRITE_TOKEN_TEST` (a **second** store) to `.env.test`. **2026-11-07:** the dev token is in `.env.local` and the user verified uploads manually in `npm run dev` (upload, picture still shown after refresh). `BLOB_READ_WRITE_TOKEN_TEST` is **not set yet**, and the QA database login fails (§4), so steps 2–3 are still pending.
+2. Run `npm run qa:server` without `--no-uploads`, then plan scenario 3: upload a JPEG, replace it with a PNG (old file gone from the test store), remove it (initials back), and check the picture on the dashboard, phone preview and `/user/<handle>`.
+3. Run `npm run qa:cleanup -- --confirm` and check that QA pictures are deleted from the test store.

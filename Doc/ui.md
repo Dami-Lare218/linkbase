@@ -531,7 +531,20 @@ Built at `/dashboard` (`src/components/dashboard/`, page `src/app/(dashboard)/da
 - **Add link Dialog:** title "Add a link". Fields: URL (`md`, link icon, required) and Title (optional). Actions: Cancel (secondary) and "Add link" (primary, disabled until a URL is entered). Adding a link shows the toast "Link added".
 - **Blank by design:** the Header, Design and Settings rail destinations, the Shop empty state beyond the placeholder, and the kebab/archive/reorder/enhance behaviours are **not in the reference. They are TBD.**
 
-### 7.4 Public profile (`ProfilePage.jsx`): Reference-observed
+### 7.4 Public profile (`Gabbasdev Profile.dc.html`): Implemented
+
+Built at `/user/[handle]` (`src/components/profile/`) from `Gabbasdev Profile.dc.html` on design system `e0637ec8` (responsive preview at 1440 / 834 / 390).
+
+- **Frame:** `--surface-backdrop`; ≥640 px a centred card (max 580, `--surface-profile`, radius 32 32 0 0, `--shadow-lg`, 40/24 outer padding); <640 px full-bleed.
+- **Top bar:** white Wordmark chip (44 high, 15 px wordmark) → `/`; Share `IconButton` (`white`, `rounded`) copies `{origin}/user/{handle}` with the toast "Copied linkba.se/{handle}".
+- **Body:** circular `Avatar` 96 (88 below 640) showing the profile picture or the handle's initials; `h1` "@handle" 700, `clamp(20px, 5vw, 24px)`; active links as `LinkButton` (`external`: new tab, `rel="noopener noreferrer"`, visually hidden "(opens in a new tab)"); "No links yet." when none.
+- **Footer:** only "Explore Linkbase" → `/` (the design's Cookie preferences, Report and Privacy have no pages yet).
+- **Claim overlay:** shown when the owner keeps the Linkbase footer on: sticky gradient with a white pill "linkba.se/you" → `/signup` and "Join {handle} on Linkbase today"; ✕ dismisses it.
+- **Omitted (no data yet):** bio, social icons, featured link layout.
+- **404:** `not-found.tsx` in the same frame: "This Linkbase doesn't exist yet", Claim it → `/signup`, Go home.
+- **Dashboard → Header:** profile picture panel (circle preview 120/96, Upload/Replace picture, local preview before Save, Remove behind a confirmation dialog, inline errors, toasts). The dashboard avatar, phone preview and public page all show the picture. The Open profile tool now opens `/user/{handle}` in a new tab.
+
+#### Reference notes (`ProfilePage.jsx`)
 - **Page:**
   - ≥640: `--surface-backdrop` behind a centred column with max-width `--profile-max`, `--surface-profile`, radius 32 32 0 0, `--shadow-lg`, 32px top offset.
   - <640: a full-bleed `--surface-profile` canvas with no radius or shadow.

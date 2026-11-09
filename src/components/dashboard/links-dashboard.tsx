@@ -38,6 +38,7 @@ import { AddLinkDialog } from "./add-link-dialog";
 import { DeleteLinkDialog } from "./delete-link-dialog";
 import { LinkCard } from "./link-card";
 import { PreviewSettingsDialog } from "./preview-settings-dialog";
+import { ProfilePicturePanel } from "./profile-picture-panel";
 import { ProfilePreviewPhone } from "./profile-preview-phone";
 import type { PreviewTheme } from "./profile-preview-phone";
 
@@ -59,6 +60,8 @@ type LinksDashboardProps = {
   handle: string;
   links: DashboardLink[];
   showFooter: boolean;
+  /** Profile picture URL, or null. */
+  image: string | null;
 };
 
 type ToastState = { id: number; message: string; tone: ToastTone };
@@ -68,7 +71,7 @@ type ToastState = { id: number; message: string; tone: ToastTone };
  * by the Server Actions (`refresh()`); switches update instantly through useOptimistic.
  * Banner, theme, mobile view and section are UI state only (not saved).
  */
-export function LinksDashboard({ name, email, handle, links, showFooter }: LinksDashboardProps) {
+export function LinksDashboard({ name, email, handle, links, showFooter, image }: LinksDashboardProps) {
   const [bannerOn, setBannerOn] = useState(true);
   const [theme, setTheme] = useState<PreviewTheme>("mist");
   const [view, setView] = useState<"edit" | "preview">("edit");
@@ -81,6 +84,9 @@ export function LinksDashboard({ name, email, handle, links, showFooter }: Links
   // Confirmed changes the refreshed server data may not show yet (see applyLinkOverrides).
   const [overrides, setOverrides] = useState<LinkOverrides>(NO_LINK_OVERRIDES);
   const [savedFooter, setSavedFooter] = useState<boolean | null>(null);
+  // A picture change confirmed by the server, until the refreshed data shows it (undefined: none).
+  const [savedImage, setSavedImage] = useState<string | null | undefined>(undefined);
+  const currentImage = savedImage === undefined ? image : savedImage;
 
   const [, startTransition] = useTransition();
   const [optimisticLinks, setLinkActiveOptimistic] = useOptimistic(
@@ -253,10 +259,10 @@ export function LinksDashboard({ name, email, handle, links, showFooter }: Links
 
                   <div className="my-6 flex items-center gap-4">
                     <span className="min-[768px]:hidden">
-                      <Avatar name={displayName} size={56} />
+                      <Avatar name={displayName} src={currentImage} size={56} />
                     </span>
                     <span className="hidden min-[768px]:inline-flex">
-                      <Avatar name={displayName} size={72} />
+                      <Avatar name={displayName} src={currentImage} size={72} />
                     </span>
                     <div className="flex min-w-0 flex-col gap-1">
                       <span className="truncate text-[18px] font-semibold">{displayName}</span>
@@ -312,6 +318,15 @@ export function LinksDashboard({ name, email, handle, links, showFooter }: Links
                   </div>
                   </div>
                 </>
+              ) : section === "header" ? (
+                <ProfilePicturePanel
+                  handle={handle}
+                  image={currentImage}
+                  onChanged={(url, message) => {
+                    setSavedImage(url);
+                    showToast(message);
+                  }}
+                />
               ) : (
                 <div className="py-12 text-center text-fg-secondary">
                   <h2 className="m-0 mb-2 font-display text-[24px] font-extrabold tracking-[-0.02em] text-fg-primary">
@@ -330,11 +345,11 @@ export function LinksDashboard({ name, email, handle, links, showFooter }: Links
             }`}
           >
             <ProfilePreviewPhone
-              name={displayName}
               handle={handle}
               links={optimisticLinks}
               showFooter={optimisticFooter}
               theme={theme}
+              image={currentImage}
             />
             <div className="hidden flex-col gap-1 rounded-[20px] bg-white p-1.5 shadow-[var(--shadow-sm)] min-[1100px]:flex">
               <IconButton
@@ -343,8 +358,7 @@ export function LinksDashboard({ name, email, handle, links, showFooter }: Links
                 variant="ghost"
                 onClick={() => setSettingsOpen(true)}
               />
-              {/* The public profile page (/user/[handle]) isn't built yet. */}
-              <IconButton icon={ExternalLink} label="Open profile (coming soon)" variant="ghost" disabled />
+              <IconButton icon={ExternalLink} label="Open profile" variant="ghost" href={`/user/${handle}`} newTab />
             </div>
           </aside>
         </div>

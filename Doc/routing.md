@@ -2,7 +2,7 @@
 
 How Linkbase routes are organised in the App Router. Read this before adding or moving a route, layout, loading/error file, Route Handler or Server Action.
 
-> **Status:** The landing page, auth pages and dashboard exist (§1). Everything else here is **planned**. Undecided details are marked **TBD**. Related: [`architecture.md`](architecture.md) (structure), [`auth.md`](auth.md) (route protection), [`coding-standards.md`](coding-standards.md) (exports and naming).
+> **Status:** The landing page, auth pages, onboarding, dashboard and public profile `/user/[handle]` exist (§1). Everything else here is **planned**. Undecided details are marked **TBD**. Related: [`architecture.md`](architecture.md) (structure), [`auth.md`](auth.md) (route protection), [`coding-standards.md`](coding-standards.md) (exports and naming).
 
 Terms and file conventions here were checked against the bundled docs for the installed Next.js 16.4.3 (`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/`).
 
@@ -38,7 +38,8 @@ src/
 src/app/
   user/
     [handle]/
-      page.tsx                  # /user/[handle]  public profile (planned)
+      page.tsx                  # /user/[handle]  public profile
+      not-found.tsx             # branded 404 for unknown handles
   (dashboard)/
     dashboard/
       …                         # add-links and other dashboard pages go here (planned)
@@ -52,7 +53,8 @@ src/app/
 | `/dashboard` in `(dashboard)` | Signed-in users with a handle (others go to `/onboarding`) | Exists: links editor (add, inline edit, delete, toggles) with live preview; actions in `dashboard/actions.ts` |
 | Add-links page under `/dashboard/…` | Signed-in only | Planned. Exact path TBD |
 | `src/app/api/auth/[...nextauth]` | Auth.js endpoints | Exists |
-| `/user/[handle]` public profile | Public | Planned |
+| `/user/[handle]` public profile | Public | Exists |
+| `/[handle]` short profile URL (rewrite to `/user/[handle]`) | Public | Exists (`next.config.ts`) |
 | Other `src/app/api/…` Route Handlers | Depends on handler | Planned. None decided |
 
 ## 3. Route groups
@@ -78,10 +80,11 @@ Keep one top-level root layout (`src/app/layout.tsx`). Giving each group its own
 ### `/user/[handle]` public profile
 - `src/app/user/[handle]/page.tsx`. `[handle]` is a **dynamic segment**.
 - Type props with `PageProps<"/user/[handle]">`. `params` is a Promise: `const { handle } = await props.params`.
+- **Short URL `/<handle>`:** a `fallback` rewrite in `next.config.ts` serves `/user/<handle>` at `/<handle>` (the address bar keeps the short URL). There is no `src/app/[handle]` folder. `fallback` rewrites run only after every page, file and dynamic route has been checked (bundled docs: `rewrites.md`), so existing and future routes always win over a handle. The source only matches one segment in the handle format (`[A-Za-z0-9_-]{3,30}`, upper case allowed because `getPublicProfile()` lowercases). Every top-level route name must also be in `RESERVED_HANDLES` (`src/lib/validation/handle-rules.ts`), or a user could claim a handle that its route then hides. Verified on a production build: `/maryokafor` and `/MaryOkafor` → 200, unknown handle → 404, `/`, `/login`, `/signup`, `/dashboard`, `/onboarding`, `/api/auth/*`, `/favicon.ico` unchanged.
 - No sign-in required. Show public data only ([`auth.md`](auth.md) §7).
 - For an unknown handle, call `notFound()` (optionally with a `not-found.tsx` in that segment).
-- Handle format is decided: `^[a-z0-9_-]{3,30}$` ([`database.md`](database.md) §5.1). Look profiles up with `findPublicProfileByHandle()` ([`database.md`](database.md) §5.2), which returns `null` for unknown or malformed handles → `notFound()`.
-- **TBD:** whether profiles are prerendered (`generateStaticParams`) or rendered on demand, and caching ([`database.md`](database.md) §8).
+- Handle format is decided: `^[a-z0-9_-]{3,30}$` ([`database.md`](database.md) §5.1). The page loads the profile with `getPublicProfile()` ([`database.md`](database.md) §5.4), which returns `null` for unknown or malformed handles → `notFound()`.
+- **Decided (rendering and 404 status):** `generateStaticParams` returns one placeholder (`"-"`, which fails the format check, so builds never query the database), and the page exports **`ensureStatic = "navigation"`**. For a handle that wasn't prerendered, Next.js then waits for the complete page instead of serving the App Shell first, so `notFound()` runs before the response starts and unknown handles get a real **404** (verified on a production build: `/user/x`, `/user/ab`, `/user/A!`, `/user/%20` → 404). Without it, Next.js 16.3+ serves the App Shell and the not-found page arrives with a **200**. The page reads only cached data (`"use cache"`, `cacheLife("hours")`), as `ensureStatic` requires. It also exports **`instant = false`**: the page blocks on purpose (it awaits `params` and the lookup outside `<Suspense>`), and this tells Next.js so. Without it, `next dev` logs "URL data outside `<Suspense>`" and "did not produce a static shell" errors for every profile (bundled docs: `instant.md`, "Disabling instant"). `ensureStatic`'s own static-output check still applies.
 
 ## 5. Authenticated routes: `(dashboard)`
 

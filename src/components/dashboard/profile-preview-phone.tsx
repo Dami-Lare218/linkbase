@@ -15,11 +15,12 @@ export const PREVIEW_THEMES: { value: PreviewTheme; label: string; background: s
 ];
 
 type ProfilePreviewPhoneProps = {
-  name: string;
   handle: string;
   links: DashboardLink[];
   showFooter: boolean;
   theme: PreviewTheme;
+  /** Profile picture URL, or null for initials. */
+  image: string | null;
 };
 
 /**
@@ -29,7 +30,7 @@ type ProfilePreviewPhoneProps = {
  *
  * Scale follows the design's breakpoints through `--phone-scale` (300×620 at 1).
  */
-export function ProfilePreviewPhone({ name, handle, links, showFooter, theme }: ProfilePreviewPhoneProps) {
+export function ProfilePreviewPhone({ handle, links, showFooter, theme, image }: ProfilePreviewPhoneProps) {
   const live = getLiveLinks(links);
   const background = PREVIEW_THEMES.find((t) => t.value === theme)?.background ?? PREVIEW_THEMES[0].background;
 
@@ -52,7 +53,8 @@ export function ProfilePreviewPhone({ name, handle, links, showFooter, theme }: 
               </span>
             </div>
             <div className="flex flex-col items-center gap-3">
-              <Avatar name={name || handle} size={80} />
+              {/* Initials from the handle, like the public profile (the name is never public). */}
+              <Avatar name={`@${handle}`} src={image} size={80} />
               <div className="text-[18px] font-bold tracking-[-0.02em]">@{handle}</div>
               <div className="mt-1.5 flex w-full flex-col gap-2.5 [&_a]:min-h-11 [&_a]:px-10 [&_span]:text-[13px]">
                 {live.map((link) => (

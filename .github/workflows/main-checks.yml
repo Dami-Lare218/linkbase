@@ -1,0 +1,23 @@
+# Workflow 2: pushes to main, i.e. merged pull requests (Doc/deployment.md §4).
+# GitHub Actions runs the same quality checks on the merged commit. Vercel's GitHub integration
+# deploys main to Production on its own; this workflow doesn't deploy anything.
+
+name: Main checks
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One group per commit: every commit on main gets its own result (Vercel deploys each one),
+# and runs are never cancelled, so a missing check can't be mistaken for a passing one.
+concurrency:
+  group: main-checks-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    name: Quality
+    uses: ./.github/workflows/quality-checks.yml

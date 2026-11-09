@@ -36,6 +36,8 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   "onboarding",
   "settings",
   "user",
+  // Next.js serves its own files under /_next, so this short URL could never work.
+  "_next",
 ]);
 
 /** Trims and lowercases, so `" Maya_Ortiz "` becomes `"maya_ortiz"`. */

@@ -1,5 +1,10 @@
+import Image from "next/image";
+
 type AvatarProps = {
+  /** Used for the initials and the accessible name. */
   name: string;
+  /** Profile picture URL (Vercel Blob). Initials show when it's missing. */
+  src?: string | null;
   size?: number;
   ring?: boolean;
   /** Fallback background colour (any CSS colour). Defaults to grey-300. */
@@ -20,9 +25,10 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-/** Circular avatar showing the person's initials. Photo support comes with profiles. */
+/** Circular avatar: the profile picture when there is one, otherwise the person's initials. */
 export function Avatar({
   name,
+  src,
   size = 96,
   ring = false,
   background = "var(--lb-gray-300)",
@@ -38,7 +44,11 @@ export function Avatar({
       } ${className}`}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.38), background, color }}
     >
-      {getInitials(name)}
+      {src ? (
+        <Image src={src} alt="" width={size} height={size} sizes={`${size}px`} className="h-full w-full object-cover" />
+      ) : (
+        getInitials(name)
+      )}
     </span>
   );
 }
